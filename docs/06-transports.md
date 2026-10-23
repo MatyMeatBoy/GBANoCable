@@ -32,3 +32,22 @@ Linux), no ports to open. Bandwidth is tiny (a few KB/s per player); a 1 vCPU VP
 rooms. Re-sending the room every second lets the relay follow a player whose address changed.
 
 Ideas welcome: STUN/ICE hole punching with relay fallback, WebRTC data channels for web builds, a room browser.
+
+## Lobbies: one provider, several backends (ReKHCoM, 23/10/2026)
+
+Players should not type addresses. ReKHCoM shows a lobby screen before the link menu (public rooms, open one, enter
+one, or the local cable) and keeps the backend behind one small interface: list, open, enter, "who am I".
+
+- **Steam (free, PC):** Valve's test app (Spacewar, AppID 480) gives lobbies, NAT traversal and relays without an
+  AppID of your own; many community ports use it for testing. Tag the lobbies with your game and the link protocol
+  version (`rekhcom=link-3`), ask for lobbies with a free slot, and store the host's name and cartridge region as
+  lobby data. "Signed in" = `SteamAPI_Init` works and `BLoggedOn`; otherwise the screen says to open Steam, with a
+  retry (Steam may be opened while the game runs).
+- **Your own room server (VPS, any platform with UDP):** extend the relay with three datagrams: `A` (a host
+  announces its public room every second while it waits: protocol version, region, room code, name), `L` (list
+  request with the version) and `R` (the rooms of that version still waiting, announced in the last 5 s). Picking a
+  room just yields the ordinary relay spec with its code, so the link code never knows there was a lobby.
+- **Same version only:** list rooms by link protocol version; show rooms of another cartridge region but do not let
+  them be entered (the cartridges never linked across regions either).
+- A test that covers it all without accounts: two hidden games and a local room server; one opens a room from the
+  lobby screen, the other refreshes, finds it and enters, then they battle (ReKHCoM `port/tools/netlink_lobby.sh`).
