@@ -2,8 +2,10 @@
 
 1. **Done**: packet slots, never-cut policy, adaptive buffer (reference library + test); ReKHCoM online alpha over
    Steam (Spacewar 480), direct UDP and a relay.
-2. **State hashing and repair**: hash the shared state every N frames inside the slot stream; on mismatch the
-   parent sends its snapshot (savestate) instead of cutting. Same for a player who restarts and rejoins.
+2. **State hashing and repair**: hashing is done in ReKHCoM (0 desyncs measured). Repair by sending the parent's
+   snapshot only works when every machine stores the world the same way. Caveat found in KHCoM: each console keeps
+   the battle from its own side (local player = "main" work area), so a snapshot must be side-swapped before the
+   other machine can load it. Document per game whether the state is side-relative.
 3. **Rollback** for play loops that exchange inputs (KHCoM's VS battle does): predict the others' input, simulate,
    restore and re-simulate on misprediction; removes the buffer's delay.
 4. **Crossplay**: the relay transport compiled for Android, Switch/Vita homebrew, Linux; room codes typed in game.
