@@ -24,13 +24,21 @@ Do not send the cable over the network. Find the layer **above** the registers w
 
 1. **Slots**: every game frame is a slot. Each console fills its slot with one packet of its own queue (or an
    empty one) and sends it with the slot number.
-2. **Pairs (or groups)**: when slot *n* of every player is known, the combined packet of slot *n* is handed to every
-   game in the same order: exactly what the cable would have carried, deterministic on every machine.
+2. **Pairs (or groups), on the same frame**: link frame *n* of every game (its *n*-th call to the cable since the
+   connection) receives exactly the pair of slot *n − D*, with the same delay *D* on every machine. Handing pairs
+   over "as they arrive" is not enough: the data is identical but lands on different game frames, and any state
+   machine that runs while waiting (handshakes, data exchanges, timers, the random generator) drifts apart.
 3. **Never cut**: none of the cable's errors (timeout, queue full, checksum) are raised over the network. A missing
    packet makes the game *wait*; it goes on when the packet arrives. A real outage shows "waiting for the other
    player" and resumes.
-4. **Smooth**: a small adaptive buffer (2-8 frames) absorbs jitter; games that exchange *inputs* can go further with
-   rollback.
+4. **Smooth**: *D* is picked once, by the host, from the round trip measured during the handshake (one way plus a
+   jitter margin, in frames) and sent to the other side; a frame whose pair is late waits for it (picture frozen,
+   window alive). An adaptive buffer that each side tunes on its own breaks determinism. Games that exchange
+   *inputs* can go further with rollback.
+
+Lesson from ReKHCoM (PC x86 vs Android ARM64): two equal PCs never showed the bug; a slow device did. The child
+never received the parent's battle seed because the exchange ran on frames where the pair had not arrived yet.
+Test with two machines of very different speed, or force it (one side under an emulator), before trusting a hash.
 
 Measured in ReKHCoM: 4 frames of delay + up to 6 frames of jitter + 5% packet loss: 3-6 waited frames in 3600;
 a 10 s total outage in the middle of a battle: both games wait and continue in sync; a hash of the shared battle
