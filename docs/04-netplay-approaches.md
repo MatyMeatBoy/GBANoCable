@@ -35,3 +35,30 @@ carry state.
 1. Find the packet layer (docs/03, docs/05). Always do packet slots first: it gives correctness and "never cut".
 2. If the play loop exchanges inputs and is deterministic: add rollback to remove the buffer's delay.
 3. If it exchanges state or is not deterministic: hash the state every N frames and repair from the host.
+
+## Rollback on top of packet slots (done in ReKHCoM, 23/10/2026)
+
+Rollback is not only for games that exchange raw inputs. ReKHCoM runs it on the cartridge's own packets:
+
+1. **Lockstep first.** Link frame *n* of every game plays the pair of slot *n − D* (same *D* everywhere). Without
+   this, rollback has nothing deterministic to roll back to.
+2. **Guess only where it is safe.** In the battle the packets are keys: guess the other side's slot as its last
+   one. In the link menus (screens change, data is exchanged, things load) keep waiting for the real packet. Decide
+   by the game mode, not by the cartridge's "link active" flag (it is on for the whole session).
+3. **Snapshots at the one stable point.** Save the whole GBA memory, the game's globals and the emulated hardware
+   (DMA, PPU, audio) at the main loop's wait for the vertical blank, in a ring (32 frames, ~740 KB each). Record the
+   keys of every frame. On a wrong guess: restore, replay to now with the recorded keys, without drawing, sounding
+   or pacing, inside the current real frame.
+4. **Packets are not inputs: allow revisions.** Cartridge packets often carry what was received (KHCoM's parent
+   relays both players' keys). A replayed frame can produce a different packet: send the new one again (its own
+   datagram, for a while measured by the clock) and let the other side roll back what used the old one. It
+   converges: each packet depends only on earlier frames.
+5. **Time sync.** The side running ahead gives one frame of its pacing schedule back now and then (each packet
+   carries how far ahead its sender runs). Without it one side guesses nearly every frame and the other never does.
+6. **Check on final frames only.** Hash the shared state and compare only frames older than any possible rollback.
+7. **Test what breaks it.** A replay-determinism mode (force rollbacks with no wrong guess, compare every replayed
+   frame byte for byte with the first run) finds state the snapshots miss. A latency simulator must count time, not
+   frames: a game that waits makes no frames, and a frame-based delay deadlocks the test.
+
+Measured: two PCs, round trip ~160 ms with jitter and loss: 0 waited frames in 2400 battle frames, 20/20 state checks
+equal; round trip ~230 ms with 5 % loss: still equal, waits only at the peaks.
