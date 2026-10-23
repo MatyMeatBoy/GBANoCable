@@ -33,7 +33,9 @@ Do not send the cable over the network. Find the layer **above** the registers w
    rollback.
 
 Measured in ReKHCoM: 4 frames of delay + up to 6 frames of jitter + 5% packet loss: 3-6 waited frames in 3600;
-a 10 s total outage in the middle of a battle: both games wait and continue in sync.
+a 10 s total outage in the middle of a battle: both games wait and continue in sync; a hash of the shared battle
+state compared every 120 frames: 0 desyncs in 20+ checks with both players fighting (and it fires when a
+difference is forced).
 
 ## Contents
 
