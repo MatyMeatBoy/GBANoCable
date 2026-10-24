@@ -62,3 +62,22 @@ Rollback is not only for games that exchange raw inputs. ReKHCoM runs it on the 
 
 Measured: two PCs, round trip ~160 ms with jitter and loss: 0 waited frames in 2400 battle frames, 20/20 state checks
 equal; round trip ~230 ms with 5 % loss: still equal, waits only at the peaks.
+
+## Quality-of-life features worth copying (ReKHCoM, 23/10/2026)
+
+What players of other netplay ports (Slippi for Melee, Fightcade, Dolphin netplay, the SM64 / Ship of Harkinian co-op
+mods) end up asking for, and how each fits on the packet-slot model:
+
+- **A network line on screen** (round trip, input delay, frames of the last rollback). Measure the round trip all the
+  time from the acks of your own slots (time the slot was made → the datagram that acknowledges it), not only in the
+  handshake; smooth it (7/8 old + 1/8 new). Testers report "it felt laggy" much better with numbers.
+- **Leaving when the other player is gone**, without breaking the game's logic: after some seconds of waiting, let
+  the player give up, and from then on report the cable's own timeout every frame. The cartridge then runs its own
+  "communication error" screen and goes back to its menus, exactly as when a real cable is pulled. Never invent a
+  menu flow the game does not have.
+- **Manual input delay** (auto by default from the round trip): higher delay = fewer rollback corrections on a bad
+  connection. The host's value is the one both use.
+- **Version check in the hello**: two builds with different link rules must not meet (they would desync later).
+- **A lobby with the player's name** (Steam name, or a name setting for the room server).
+- Later: private rooms by code entered in the game (needs an on-screen keyboard for pads), spectators (send the
+  confirmed pairs to a third client), replays (the confirmed pairs are the whole replay).
