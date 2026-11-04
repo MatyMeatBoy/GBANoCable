@@ -7,8 +7,9 @@ By **MatyMeatBoy**. Research, documentation and a reference implementation for p
 error" every time the connection hiccups.
 
 > Status: research + reference implementation (alpha). Born from the online link battle of
-> [ReKHCoM](https://github.com/MatyMeatBoy/ReKHCoM) (Kingdom Hearts: Chain of Memories, GBA), where it already works
-> over Steam, direct IP and a relay. Help is welcome: see [CONTRIBUTING.md](CONTRIBUTING.md).
+> [ReKHCoM](https://github.com/MatyMeatBoy/ReKHCoM) (Kingdom Hearts: Chain of Memories, GBA), where it works over
+> Steam, direct IP and a relay with a public room list, with rollback in battle (v2.5-online-beta, November 2026).
+> Help is welcome: see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## The problem
 
@@ -45,6 +46,12 @@ a 10 s total outage in the middle of a battle: both games wait and continue in s
 state compared every 120 frames: 0 desyncs in 20+ checks with both players fighting (and it fires when a
 difference is forced).
 
+Lesson from longer battles with rollback (01/11/2026): a packet that carries a copy of *received* data (KHCoM's
+parent relays both players' keys) changes when its sender replays a frame, and that change can arrive after the
+other side made the frame final. Derive such copies on every machine instead: 0 revisions, and 32-bit vs 64-bit
+builds kept every check equal (50/50) at 3+3 frames of lag with 2 % loss. Details in
+[docs/04](docs/04-netplay-approaches.md#one-simulation-on-every-machine-lessons-from-a-lasting-desync-rekhcom-01112026).
+
 ## Contents
 
 | Path | What |
@@ -55,10 +62,11 @@ difference is forced).
 | [docs/04-netplay-approaches.md](docs/04-netplay-approaches.md) | Register-level, packet slots, input lockstep, rollback, host authority, streaming |
 | [docs/05-recomp-without-decomp.md](docs/05-recomp-without-decomp.md) | Finding and hooking a game's link layer in a static recompilation, without a decompilation |
 | [docs/06-transports.md](docs/06-transports.md) | UDP, Steam (Spacewar 480 for development), a relay on a VPS for crossplay |
-| [docs/07-testing.md](docs/07-testing.md) | Testing with two local instances and simulated delay, jitter, loss and outages |
+| [docs/07-testing.md](docs/07-testing.md) | Testing with two local instances, simulated delay/jitter/loss/outages, reproducing a desync |
 | [games/](games/) | Per-game protocol notes (Kingdom Hearts CoM documented; others: help wanted) |
-| [reference/](reference/) | `gbanocable` C library: the slot engine for 2-4 players, transport-agnostic, with a test |
-| [tools/relay.py](tools/relay.py) | Room-code relay for a VPS (standard library Python) |
+| [reference/](reference/) | `gbanocable` C library: the slot engine for 2-4 players and a desync check, transport-agnostic, with tests |
+| [tools/relay.py](tools/relay.py) | Hardened room-code relay and room list for a VPS, with a test-only lag/jitter/loss mode (standard library Python) |
+| [tools/pairdiff.py](tools/pairdiff.py) | Compares the final groups two games played, from their traces: finds where and in which words they drifted |
 | [docs/references.md](docs/references.md) | Everything this builds on |
 
 ## Español

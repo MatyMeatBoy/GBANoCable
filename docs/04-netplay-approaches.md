@@ -52,7 +52,9 @@ Rollback is not only for games that exchange raw inputs. ReKHCoM runs it on the 
 4. **Packets are not inputs: allow revisions.** Cartridge packets often carry what was received (KHCoM's parent
    relays both players' keys). A replayed frame can produce a different packet: send the new one again (its own
    datagram, for a while measured by the clock) and let the other side roll back what used the old one. It
-   converges: each packet depends only on earlier frames.
+   converges: each packet depends only on earlier frames. **Caveat (found later, see "One simulation on every
+   machine" below):** it converges only if the revision arrives before the other side treats that frame as final.
+   It may not. Where a packet carries a copy of received data, derive that copy locally instead.
 5. **Time sync.** The side running ahead gives one frame of its pacing schedule back now and then (each packet
    carries how far ahead its sender runs). Without it one side guesses nearly every frame and the other never does.
 6. **Check on final frames only.** Hash the shared state and compare only frames older than any possible rollback.
@@ -81,3 +83,75 @@ mods) end up asking for, and how each fits on the packet-slot model:
 - **A lobby with the player's name** (Steam name, or a name setting for the room server).
 - Later: private rooms by code entered in the game (needs an on-screen keyboard for pads), spectators (send the
   confirmed pairs to a third client), replays (the confirmed pairs are the whole replay).
+
+## One simulation on every machine: lessons from a lasting desync (ReKHCoM, 01/11/2026)
+
+The rollback above held 20/20 state checks in short tests, yet longer battles with attacks drifted apart for good.
+Two separate causes, and a few traps met on the way. Each is a reusable rule.
+
+### Relayed data in packets: derive it on every machine, do not revise it
+
+- **Mechanism.** In many 2-player cable protocols the parent echoes received data back: KHCoM's parent puts both
+  players' keys of the previous pair into words 2 and 3 of its next packet, and the battle on *both* consoles plays
+  those relayed words, not the raw keys. Under rollback the parent replays a frame with the corrected keys of the
+  child, so its packet for that frame changes and is sent again as a revision. The child may already have made that
+  frame final (its own confirmation window passed, its hash sent) before the revision arrives. From then on the two
+  games played different keys for that frame: a desync that never heals.
+- **Symptom.** Rare and timing-dependent: 55 of 8091 pairs differed in a two-minute battle at 2-4 frames of lag,
+  and the state hash disagreed from the first minute to the end. Short or calm tests (few rollbacks) pass.
+- **How it was found.** Both games log every pair they play (`pair <frame> <words of player 0> | <words of player
+  1>`). A frame played several times is logged several times; the last line per frame is the pair the game kept.
+  Diffing the final pairs of both logs (the [pairdiff](../tools/pairdiff.py) tool) showed differences only in
+  words 2 and 3 of the parent's slot: the relayed keys, never the raw ones.
+- **Fix.** Online, every game computes the relay itself, with the same rule the parent's cartridge uses (here: the
+  relay of frame *n* is the raw keys, word 1, of both players in pair *n − 1*), and stores the result in game memory
+  so a rollback restores it like any other state. The parent sends constant zeros in those words. Its packets then
+  depend only on its own input and never change on a replay: 0 revisions per battle (was hundreds), and the pairs of
+  both logs identical.
+- **General rule.** Under rollback, a packet should depend only on local input. Anything derived from received
+  data must be derived locally, on every machine, from confirmed data. Revisions are a last resort for packets the
+  game builds from what it received (menus, handshakes), and those parts should run in lockstep, not on guesses.
+- **Limits.** Needs the decompiled (or traced) relay rule and the knowledge of which words the play loop reads. It
+  changes what goes over the wire: bump the link protocol version so old and new builds never meet. Local cable play
+  keeps the original behaviour.
+
+### What the port adds enters as inputs the original game already understands
+
+- **Mechanism.** A port-added "dodge" button was carried as an extra key bit plus a pending flag in game memory,
+  consumed by the battle code. With attacks it desynced within a minute: the extra state was not part of what both
+  sides replayed identically.
+- **Fix.** Generate the button as the original input sequence (here the d-pad double tap: release, tap, release,
+  tap) in the input layer, before the keys enter the link, and do not generate anything while the rollback replays a
+  frame (the recorded keys of that frame already contain it). The other game, the rollback and the replay then see
+  only ordinary keys.
+- **Rule.** Online, a port feature must reach the simulation through the inputs the cartridge already exchanges. Any
+  new game-side state is a new source of desync unless both sides produce it from the same exchanged data.
+
+### Keep tooling state out of the rolled-back memory
+
+Trace counters ("last slot received") that lived in the game's own memory were restored by every rollback, and the
+replay-determinism test reported them as the first difference, hiding real ones. Session and tooling state belongs
+next to the transport's ring, outside the snapshot. When the determinism test finds a difference in RAM, report the
+heap block (allocation) that holds the byte: it names the culprit at once.
+
+### Check only what is still shared
+
+After the relay fix, the few remaining hash mismatches all fell on the frame a fighter reached 0 HP: positions and
+HP equal, only the random state different. Each game then plays its own side of the result (a win screen on one, a
+loss screen on the other), which draws random numbers differently; the next battle starts again from the shared
+seed and every later check matched. The hash function returns "no check" once the round is decided (the reference
+library's `gnc_check_record(..., 0)`). Only valid if the game really re-synchronises (re-seeds) before the shared
+state matters again: confirm that the later checks match.
+
+### Results
+
+Two hidden games through a local relay with injected lag, jitter and loss, both players attacking and dodging:
+
+| Builds | Network | Checks | Result |
+|---|---|---|---|
+| before the fix | 2-4 frames of lag | - | permanent desync from the first minute; 55/8091 pairs differ |
+| 64-bit vs 64-bit | 3+3 frames of lag, 2 % loss | 60 | 1 isolated mismatch at a KO frame (then skipped by the rule above) |
+| 32-bit vs 64-bit | same | 50 | 0 desync |
+
+Two different builds of the same game (32-bit and 64-bit, different compilers and speeds) are a cheap stand-in for
+"two different devices": test that pair, not only two copies of one build.

@@ -31,7 +31,19 @@ receive queue was not empty). If both sides receive the same packets in the same
 identical forever (same random seed exchanged at start, same inputs). Desync is then impossible by construction;
 latency only shows as waiting, which the adaptive buffer hides.
 
+## Data the parent relays
+
+Two-player Multiplay protocols often have the parent echo what it received: its next packet carries both players'
+data of the previous transfer, and *both* consoles act on that echo, not on the raw data (KHCoM's battle plays the
+keys the parent relays, one frame later). On a cable this is free. Online it matters twice: under lockstep it adds
+nothing but a frame of delay; under rollback the parent's packet changes whenever it replays a frame, and that late
+change can reach the child after the child made the frame final (a permanent desync). Record per game which packet
+words are relayed copies and by which rule, so the port can compute the relay on every machine instead
+([docs/04](04-netplay-approaches.md#relayed-data-in-packets-derive-it-on-every-machine-do-not-revise-it)).
+
 ## What to record per game (template in [games/TEMPLATE.md](../games/TEMPLATE.md))
 
 Packet size, queue depth, the send/receive functions, the status bits, the connect handshake, every retry
-counter/timeout, whether the play loop is lockstep, and whether packets carry inputs or state.
+counter/timeout, whether the play loop is lockstep, whether packets carry inputs or state, which words are relayed
+copies of received data, and where a round ends (the state each side plays differently on purpose: win/lose
+screens).
