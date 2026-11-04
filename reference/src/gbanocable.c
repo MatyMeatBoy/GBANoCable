@@ -135,3 +135,94 @@ int gnc_take(gnc_session* s, uint16_t out[GNC_MAX_PLAYERS][GNC_MAX_WORDS]) {
     s->taken++;
     return 1;
 }
+
+/* ---- desync check */
+
+int gnc_check_init(gnc_check* c, int me, uint32_t every, uint32_t settle) {
+    if (me < 0 || me >= GNC_MAX_PLAYERS || every == 0)
+        return 0;
+    memset(c, 0, sizeof(*c));
+    c->me = me;
+    c->every = every;
+    c->settle = settle;
+    return 1;
+}
+
+void gnc_check_record(gnc_check* c, uint32_t frame, uint32_t hash) {
+    int i = (int)((frame / c->every) % GNC_CHECKS);
+    if (frame % c->every != 0)
+        return;
+    if (c->at[i] == frame && (c->state[i] == 2 || c->state[i] == 4))
+        return; /* final: a late replay cannot change what was sent */
+    c->at[i] = frame;
+    c->hash[i] = hash;
+    c->state[i] = hash ? 1 : 3;
+}
+
+/* our final hash of slot i against what the others sent for the same frame */
+static int check_compare(gnc_check* c, int i) {
+    int p, j, result = 0;
+    if (c->state[i] != 2)
+        return 0;
+    for (p = 0; p < GNC_MAX_PLAYERS; p++)
+        for (j = 0; j < GNC_CHECKS; j++)
+            if (c->peer_known[p][j] == 1 && c->peer_at[p][j] == c->at[i]) {
+                c->peer_known[p][j] = 2; /* compared: a duplicate of it is ignored */
+                c->checks++;
+                if (c->peer_hash[p][j] != c->hash[i]) {
+                    c->mismatches++;
+                    if (!c->first_mismatch)
+                        c->first_mismatch = c->at[i] + 1;
+                    result = -1;
+                } else if (result == 0) {
+                    result = 1;
+                }
+            }
+    return result;
+}
+
+int gnc_check_poll(gnc_check* c, uint32_t confirmed, uint8_t out[GNC_CHECK_DATAGRAM]) {
+    int i;
+    for (i = 0; i < GNC_CHECKS; i++) {
+        if ((c->state[i] != 1 && c->state[i] != 3) || c->at[i] + c->settle > confirmed)
+            continue;
+        if (c->state[i] == 3) { /* nothing to compare at this frame */
+            c->state[i] = 4;
+            c->skipped++;
+            continue;
+        }
+        c->state[i] = 2;
+        out[0] = 'H';
+        out[1] = (uint8_t)c->me;
+        put32(out + 2, c->at[i]);
+        put32(out + 6, c->hash[i]);
+        check_compare(c, i);
+        return GNC_CHECK_DATAGRAM;
+    }
+    return 0;
+}
+
+int gnc_check_receive(gnc_check* c, const uint8_t* d, int size) {
+    uint32_t at, hash;
+    int from, i, j;
+    if (size < GNC_CHECK_DATAGRAM || d[0] != 'H')
+        return 0;
+    from = d[1];
+    if (from >= GNC_MAX_PLAYERS || from == c->me)
+        return 0;
+    at = get32(d + 2);
+    hash = get32(d + 6);
+    if (hash == 0 || at % c->every != 0)
+        return 0;
+    i = (int)((at / c->every) % GNC_CHECKS);
+    if (c->at[i] == at && c->state[i] == 4)
+        return 0; /* we skipped that frame */
+    for (j = 0; j < GNC_CHECKS; j++)
+        if (c->peer_known[from][j] && c->peer_at[from][j] == at)
+            return 0; /* a duplicate */
+    j = i;
+    c->peer_at[from][j] = at;
+    c->peer_hash[from][j] = hash;
+    c->peer_known[from][j] = 1;
+    return c->at[i] == at ? check_compare(c, i) : 0;
+}

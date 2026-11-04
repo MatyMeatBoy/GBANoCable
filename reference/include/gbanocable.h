@@ -56,4 +56,42 @@ void gnc_receive(gnc_session* s, const uint8_t* data, int size);
 /* the next group: out[player][word]. Returns 1 with a group, 0 when the game must wait this frame. */
 int gnc_take(gnc_session* s, uint16_t out[GNC_MAX_PLAYERS][GNC_MAX_WORDS]);
 
+/* ---- desync check (optional, independent of the slots)
+ *
+ * Every `every` link frames each game hashes the state all players must agree on (positions, health, random
+ * generators, in player order, never side-relative) and calls gnc_check_record. With rollback a frame is played
+ * several times: record it every time; the last value counts. The hash is sent only once the frame is final
+ * (`settle` frames behind what every player confirmed, with no rollback pending), so a guess that is corrected
+ * later never reports a desync. A hash of 0 means "no check here": return it when the shared state stops being
+ * shared on purpose, e.g. once a round is decided and each side plays its own win or loss screen (which can draw
+ * random numbers differently) while the next round starts from a seed exchanged again.
+ */
+#define GNC_CHECKS 8
+#define GNC_CHECK_DATAGRAM 10 /* 'H', from, frame (4), hash (4) */
+
+typedef struct {
+    int me;
+    uint32_t every, settle;
+    uint32_t at[GNC_CHECKS], hash[GNC_CHECKS];
+    uint8_t state[GNC_CHECKS]; /* 0 empty, 1 recorded, 2 final (sent), 3 recorded as skipped, 4 final skipped */
+    uint32_t peer_at[GNC_MAX_PLAYERS][GNC_CHECKS], peer_hash[GNC_MAX_PLAYERS][GNC_CHECKS];
+    uint8_t peer_known[GNC_MAX_PLAYERS][GNC_CHECKS]; /* 0 none, 1 received, 2 compared */
+    uint32_t checks, mismatches, skipped, first_mismatch; /* first_mismatch: its frame + 1 (0 none) */
+} gnc_check;
+
+/* me as in gnc_init; every > 0 link frames between checks; settle = frames a rollback can reach back (or more) */
+int gnc_check_init(gnc_check* c, int me, uint32_t every, uint32_t settle);
+
+/* the state hash of `frame` (call it when frame % every == 0, also when a rollback plays the frame again).
+   hash 0: no check for this frame. Frames already final are not changed. */
+void gnc_check_record(gnc_check* c, uint32_t frame, uint32_t hash);
+
+/* `confirmed`: link frames whose groups are known for real by this game (no guess pending). Returns the size of a
+   datagram to send to every other player (0: nothing to send; call again until 0). Sending it twice is fine. */
+int gnc_check_poll(gnc_check* c, uint32_t confirmed, uint8_t out[GNC_CHECK_DATAGRAM]);
+
+/* an 'H' datagram from another player. Returns -1 when it revealed a desync, 1 a check that matched, 0 otherwise
+   (not an 'H' datagram, a duplicate, or our side of that frame is not final yet). */
+int gnc_check_receive(gnc_check* c, const uint8_t* data, int size);
+
 #endif
