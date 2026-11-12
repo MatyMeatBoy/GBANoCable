@@ -3,7 +3,7 @@
 | Game | Platform | Notes | Status |
 |---|---|---|---|
 | Kingdom Hearts: Chain of Memories | GBA | [notes](kingdom-hearts-chain-of-memories.md) | online tested (ReKHCoM) |
-| Shining Soul II | GBA | 24-byte blocks in 32-byte MultiSio packets, checksum over 28 bytes (SS2Decomp / ShiningSoul2Recomp research) | research |
+| Shining Soul II | GBA | 24-byte blocks in 32-byte MultiSio packets, checksum over 28 bytes (SS2Decomp / ShiningSoul2Recomp research). Native port in progress: ShiningSource, see [docs/08](../docs/08-decomp-to-native-port.md) | research |
 | Pokémon Ruby/Sapphire/Emerald, FireRed/LeafGreen | GBA | cable + wireless adapter; pokeemerald / pokefirered decompilations document the link code | help wanted |
 | Mario Kart: Super Circuit | GBA | | help wanted |
 | The Legend of Zelda: Four Swords | GBA | 2-4 players | help wanted |

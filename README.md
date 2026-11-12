@@ -63,6 +63,7 @@ builds kept every check equal (50/50) at 3+3 frames of lag with 2 % loss. Detail
 | [docs/05-recomp-without-decomp.md](docs/05-recomp-without-decomp.md) | Finding and hooking a game's link layer in a static recompilation, without a decompilation |
 | [docs/06-transports.md](docs/06-transports.md) | UDP, Steam (Spacewar 480 for development), a relay on a VPS for crossplay |
 | [docs/07-testing.md](docs/07-testing.md) | Testing with two local instances, simulated delay/jitter/loss/outages, reproducing a desync |
+| [docs/08-decomp-to-native-port.md](docs/08-decomp-to-native-port.md) | The road before the cable: from a matching decompilation to a native 64-bit port, and where online fits |
 | [games/](games/) | Per-game protocol notes (Kingdom Hearts CoM documented; others: help wanted) |
 | [reference/](reference/) | `gbanocable` C library: the slot engine for 2-4 players and a desync check, transport-agnostic, with tests |
 | [tools/relay.py](tools/relay.py) | Hardened room-code relay and room list for a VPS, with a test-only lag/jitter/loss mode (standard library Python) |
