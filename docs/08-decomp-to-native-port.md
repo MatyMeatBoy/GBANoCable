@@ -90,6 +90,34 @@ Put the network under the game's packet queue, exactly as in [docs/03](03-softwa
 One relay process, port and protocol version per game on the server ([docs/06](06-transports.md)); never share
 another game's namespace.
 
+### What it took on Shining Soul II (12/11/2026)
+
+The game uses the SDK's MultiSio library, so the whole cable is three functions: init, stop, and a per-frame
+`MultiSioMain(send, receive)` that takes one 24-byte block and returns the blocks of the connected consoles plus a
+status word. Replacing those three (linker `--wrap`, so the originals stay for offline play) and writing the player
+number where the game reads it (`REG_SIOCNT`) was the entire hook. The recipe, in the order it was built:
+
+1. **Label every block on one timeline.** The host owns it; a joining player adopts it from the first host block it
+   hears. At timeline frame `F` each player is given everyone's block `F - delay`, its own included. Same label, same
+   data, on every machine.
+2. **Stall, never skip.** If a due block is missing the frame waits. Whoever is ahead waits, so players settle by
+   themselves. A delay shorter than the real latency makes the game slower, not broken (measured: four players,
+   70-90 ms each way, delay 3 instead of 6: 50% longer, no errors).
+3. **Repeat instead of retransmit.** Every packet carries all blocks the others have not acknowledged. Loss,
+   duplicates, reordering and a relay restart are one case.
+4. **Know what the game reads locally.** This game reads its own block from its send buffer and only the others'
+   from the receive slots. So delay postpones what you see of the others, not your own controls, and rollback is not
+   needed. Check this before designing prediction.
+5. **Give up a player only on evidence**: it said goodbye (left the mode, closed the window) or it has been silent
+   for many seconds. Then tell the game the truth (its bit leaves the status word) and let the game's own code react.
+6. **Test without people.** A relay that can drop, hold and reorder packets, headless players with scripted input,
+   and one log line per delivered frame (label, players, hash) compared across players. Four players, 10% loss and
+   120-160 ms of lag passed before any window was opened.
+
+A trap worth a line: a test harness that passes settings as environment variables needs a `getenv` whose results
+stay valid. The 64-bit game image had a minimal C library that recycled four buffers, and the fifth call silently
+erased the scripted input.
+
 ## 7. If you only have a static recompilation
 
 You can still get online with [docs/05](05-recomp-without-decomp.md): hook the link functions by address. What a
