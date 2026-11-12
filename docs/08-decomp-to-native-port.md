@@ -118,6 +118,35 @@ A trap worth a line: a test harness that passes settings as environment variable
 stay valid. The 64-bit game image had a minimal C library that recycled four buffers, and the fifth call silently
 erased the scripted input.
 
+### Other processors: what changed for ARM64 and Android (12/11/2026)
+
+Crossplay needs every build to compute the same numbers, so each new processor is checked against the reference with
+one hash per frame over a long scripted session. x86-64 on Windows, Linux and Android agreed at once. ARM64 did not,
+and the three causes are worth knowing before you start:
+
+- **32-bit pointers on AArch64 means clang's `arm64_32` target, and its object format is Mach-O.** No ELF toolchain
+  links ILP32 for AArch64 (clang compiles it, lld does not link it). The image is still a flat file the host maps
+  itself; nothing of Apple's is used. Give it a fixed base with `-pagezero_size` and turn off chained fixups so the
+  data holds plain addresses.
+- **That calling convention trusts declarations the decompilation does not keep consistent.** Small arguments on the
+  stack are packed (a `u16` takes two bytes) and a function does not narrow a small argument it receives. A function
+  declared with `s32` in one file and `u16` in another works on the console and on x86 and silently differs here:
+  first a sprite's scale and rotation arrived shifted, then a clipped sprite was drawn. Rewriting the generated
+  sources so that every function narrows its own small arguments (what the console's compiler did) fixed 375
+  definitions at once. The lasting repair is in the decompilation.
+- **Division.** ARM64 never traps: by zero the quotient is 0 and the remainder is the dividend. Make the x86 fault
+  handler give exactly that, including the remainder, or the builds drift apart on the first `% 0`.
+
+How each cause was found, in the order that works: per-frame hashes give the first differing frame; a call trace of
+that frame on both processors gives the function; a temporary source patch that prints the arguments of that function
+gives the value. Keep a test machine of the other processor running and send it files, instead of restarting it for
+every try: a QEMU machine without acceleration takes five minutes to boot and nine to run the session.
+
+Android adds two rules of its own. The host is a library loaded wherever the system likes, so the game image reaches
+its services through short jumps placed in low memory; and Android's Java runtime aborts any call made from a stack it
+does not know, so every service has to run on the thread's real stack, not on the game's coroutine stacks. Claim the
+low address range in a constructor, before the graphics driver and the Java heap can settle there.
+
 ## 7. If you only have a static recompilation
 
 You can still get online with [docs/05](05-recomp-without-decomp.md): hook the link functions by address. What a
