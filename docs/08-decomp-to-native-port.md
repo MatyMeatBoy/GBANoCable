@@ -175,3 +175,34 @@ compare frames against while the port grows.
 
 Online is seventh on purpose. A desync is impossible to diagnose while the single-player game still differs from the
 cartridge.
+
+## Read the game's link protocol before choosing a transport
+
+The first transport of the Shining Soul II port treated the game as a lockstep simulation: every player was
+given the same link blocks on the same frame of a shared timeline, a few frames late. It passed every
+consistency test and still played badly with real people: items and gold appeared late or never, enemies arrived
+one at a time, players saw each other in different places, and the delay crept up.
+
+The decompilation showed why. The game does not step in unison. Each console decides for its own character and
+sends its state every frame (position, facing, animation), and everything that happens once (an enemy appears, an
+item is dropped or taken, a hit, a change of map) is a message passed inside the same blocks in small
+stop-and-wait steps, each step repeated until every player's block acknowledges it. On the cable a step takes a
+frame or two. Behind a buffered delay of `d` frames each step costs `2d + 2` frames, and one item needs five steps.
+
+What the port does now, and what to check in any game before writing its transport:
+
+1. **Find out whether the blocks are inputs or state.** Look at who writes the send buffer and who reads the
+   receive buffers. If a console reads its own data from the send buffer at once and the others' from the receive
+   buffers, it is state replication, and a shared timeline buys nothing.
+2. **Look for a message layer inside the blocks** (announce, chunk, acknowledge bytes). If there is one, its cost
+   is one round trip per step, and that, not the picture, is what latency hurts.
+3. **For state replication, deliver directly**: each player's blocks in order as they arrive, repeat the last one
+   when nothing new came, never make one player wait for another. Do not skip a block that carries a new step of
+   the message layer; do drop blocks that only repeat it when several are waiting.
+4. **Carry the message layer out of band.** Patch the game's sender to hand the whole message to a reliable,
+   ordered channel of the transport, and its receiver to take whole messages from it and run the game's own
+   dispatch unchanged. In the port a message went from about 650 ms to about 100 ms at 60 ms of latency.
+5. **Decide what a departed player is.** A game written for a cable assumes ids `0..n-1` and treats silence as a
+   pulled plug. Keeping the seat, its last block and "ready" answers lets the others play on; the console the game
+   makes responsible for enemies and items cannot be replaced that way.
+6. **Test with people early.** Scripted players that press the same buttons hide exactly these problems.
