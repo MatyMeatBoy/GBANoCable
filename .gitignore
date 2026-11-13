@@ -1,3 +1,6 @@
 *.exe
 *.o
 __pycache__/
+reference/test_sim
+reference/test_check
+reference/test_direct

@@ -199,6 +199,63 @@ class RelayImpairment(unittest.TestCase):
         self.assertTrue(800 < len(t.sent) < 1200, len(t.sent))
 
 
+class RelayOutage(unittest.TestCase):
+    """--outage: a player's connection is gone for a while and comes back."""
+
+    def setUp(self):
+        self.r, self.t, self.clock = make(outages=[(2, 5, 3)], peer_timeout=30)
+        self.r.datagram_received(join(1, b'ROOM'), H)
+        self.r.datagram_received(join(2, b'ROOM'), G)  # the outage counts from here: cut off from +5 s to +8 s
+        self.t.sent.clear()
+
+    def test_nothing_passes_during_the_window_and_the_seat_is_kept(self):
+        self.clock.t += 4
+        self.r.datagram_received(b'Dbefore', G)
+        self.assertEqual(self.t.sent, [(b'Dbefore', H)])
+        self.t.sent.clear()
+        self.clock.t += 2  # +6: inside
+        self.r.datagram_received(b'Dfrom-cut', G)        # thrown away unread
+        self.r.datagram_received(join(2, b'ROOM'), G)     # even its keep-alive: no answer
+        self.r.datagram_received(b'Dto-cut', H)           # and nothing is sent to it
+        self.assertEqual(self.t.sent, [])
+        self.assertEqual(self.r.stats['outage_drops'], 3)
+        self.assertEqual(self.r.rooms['ROOM'][2][0], G)   # the lease has not run out: the seat is still its own
+        self.clock.t += 3  # +9: back
+        self.r.datagram_received(b'Dafter', G)
+        self.r.datagram_received(b'Dhello-again', H)
+        self.assertEqual(self.t.sent, [(b'Dafter', H), (b'Dhello-again', G)])
+
+    def test_only_the_address_that_took_the_seat_is_cut(self):
+        self.clock.t += 6
+        self.r.datagram_received(b'Dhost', H)             # the host speaks: dropped only on its way to seat 2
+        self.assertEqual(self.t.sent, [])
+        self.r.datagram_received(join(1, b'ROOM'), H)     # the host itself is answered
+        self.assertEqual(self.t.sent, [(b'O\x02', H)])
+
+    def test_bad_outages_are_refused(self):
+        for bad in ([(0, 1, 1)], [(3, 1, 1)], [(1, -1, 1)], [(1, 1, 0)]):
+            with self.assertRaises(ValueError):
+                relay.Relay(outages=bad)
+
+
+class RelayDatagramSize(unittest.TestCase):
+    def test_default_and_raised_limit(self):
+        r, t, _ = make()
+        r.datagram_received(join(1, b'BIG'), H)
+        r.datagram_received(join(2, b'BIG'), G)
+        t.sent.clear()
+        r.datagram_received(b'D' + bytes(512), H)
+        r.datagram_received(b'D' + bytes(513), H)         # too long for the default
+        self.assertEqual([len(d) for d, _ in t.sent], [513])
+        r, t, _ = make(max_datagram=1200)
+        r.datagram_received(join(1, b'BIG'), H)
+        r.datagram_received(join(2, b'BIG'), G)
+        t.sent.clear()
+        r.datagram_received(b'D' + bytes(1200), H)
+        r.datagram_received(b'D' + bytes(1201), H)
+        self.assertEqual([len(d) for d, _ in t.sent], [1201])
+
+
 class PairDiff(unittest.TestCase):
     HOST = ['netlink: pair 1  0acd 0010 0000 0000 | 0acd 0020 0000 0000',
             'netlink: pair 2  0acd 0010 0000 0000 | 0acd 0020 0000 0000',  # a guess...

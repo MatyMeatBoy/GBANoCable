@@ -5,8 +5,12 @@ road before that: taking a GBA game from "we only have the cartridge" to "a nati
 link work fits. It is written from two projects that did it: ReKHCoM (Kingdom Hearts: Chain of Memories) and
 ShiningSource (Shining Soul II). Dates are DD/MM/YYYY.
 
-If you have a static recompilation instead of a decompilation, read [docs/05](05-recomp-without-decomp.md) first: the
-link layer can be hooked without decompiling the game. Section 7 below says what a decompilation adds.
+If you have a static recompilation instead of a decompilation, read [docs/05](05-recomp-without-decomp.md) and
+[docs/14](14-recomp-playbook.md) first: the link layer can be hooked without decompiling the game. Section 7 below
+says what a decompilation adds.
+
+This chapter is the road and the decisions. Each mechanism of the port, **with the check that guards it and what
+the check does not cover**, is in [docs/15](15-native-port-mechanisms.md). Where the two disagree, 15 is newer.
 
 ## 1. The three stages, and what each one buys
 
@@ -68,11 +72,12 @@ those transformations in a build step that generates port sources; never hand-ed
 
 | Hardware | Replacement | Trap |
 |---|---|---|
-| Start-up and interrupts | the game's own main runs; its "wait for VBlank" call hands the frame to the port, which draws, raises the enabled interrupts, presents and paces | pace to 59.7275 Hz, not to the monitor |
-| BIOS calls | C functions with the documented behaviour | division by zero and stray pointers that the hardware tolerated |
+| Start-up and interrupts | the game's own main runs; its "wait for VBlank" call hands the frame to the port, which draws, raises the enabled interrupts (the line-match handler at its line), presents and paces | game speed must never depend on the monitor: either the port's own 59.7275 Hz clock, or a display whose rate is a multiple of 60 Hz *with a floor* that falls back to the clock ([docs/15](15-native-port-mechanisms.md), section 8) |
+| BIOS calls | C functions with the documented behaviour | division by zero and stray pointers that the hardware tolerated; a soft reset is a restart of the program; trigonometry from the BIOS's table, not the C library |
 | Hand-written assembly | native code with the same entry points | a cooperative scheduler written as an ARM context switch must become coroutines |
-| PPU | a software renderer the port owns | owning it is what makes widescreen and HUD layers clean |
-| Sound engine | a native MusicPlayer2000 sequencer and mixer reading songs from the ROM | the decompiled sound code mirrors assembly and is not worth compiling |
+| PPU | a software renderer the port owns, drawing each line with the registers of that line | owning it is what makes widescreen and HUD layers clean; guard it with a hash over every picture of the reference run |
+| Sound engine | a native MusicPlayer2000 sequencer and mixer reading songs from the ROM | the decompiled sound code mirrors assembly and is not worth compiling, but **write the native engine after it**: a first engine that did not follow the driver restarted songs the game only paused and played some samples 27% sharp |
+| Save chip | the SDK flash library's entry points over a file, replaced atomically with a backup | present the chip's identifier where the game looks for it, or the game refuses to save |
 | ROM data | map the user's ROM at `0x08000000` | words that hold addresses of *functions* must be rewritten to native functions; a data description tells you which words are safe to treat that way |
 | Code copied to RAM | redirect to the native function | games copy hot routines to IWRAM |
 
@@ -90,7 +95,15 @@ Put the network under the game's packet queue, exactly as in [docs/03](03-softwa
 One relay process, port and protocol version per game on the server ([docs/06](06-transports.md)); never share
 another game's namespace.
 
-### What it took on Shining Soul II (12/11/2026)
+### What it took on Shining Soul II (12/11/2026): the first, stepped transport
+
+> **Read this with its correction.** The recipe below is the *first* transport of that port: lockstep on one
+> timeline. It works as described and is still there for a fixed delay, but it was the wrong design for this game,
+> which replicates state and passes messages ("Read the game's link protocol before choosing a transport", at the
+> end of this chapter, and [docs/10](10-direct-transport-and-messages.md)). The hook (three functions and the
+> player number) is unchanged. Point 4 was the clue that should have been followed further. Point 5 is wrong for a
+> game in progress: telling the game the truth about a departed player ends the session for everybody
+> ([docs/11](11-departures-and-reconnect.md)).
 
 The game uses the SDK's MultiSio library, so the whole cable is three functions: init, stop, and a per-frame
 `MultiSioMain(send, receive)` that takes one 24-byte block and returns the blocks of the connected consoles plus a
@@ -170,7 +183,9 @@ compare frames against while the port grows.
 4. Picture, then input, then sound and saves.
 5. The 64-bit host.
 6. The port's own features (wide view, HUD, launcher, achievements).
-7. Online: transport, fixed delay, never-cut rules, state hash, relay, lobby.
+7. Online: **read the game's link protocol**, then the transport it calls for, never-cut rules, departures and
+   outages, the checks that fit (a state hash for lockstep, message order and views for state replication), relay,
+   lobby.
 8. Remaining platforms.
 
 Online is seventh on purpose. A desync is impossible to diagnose while the single-player game still differs from the
@@ -206,3 +221,12 @@ What the port does now, and what to check in any game before writing its transpo
    pulled plug. Keeping the seat, its last block and "ready" answers lets the others play on; the console the game
    makes responsible for enemies and items cannot be replaced that way.
 6. **Test with people early.** Scripted players that press the same buttons hide exactly these problems.
+
+Each point has its own chapter now, with what was measured afterwards: the anatomy of the blocks and messages
+([docs/09](09-multi-sio-anatomy.md)); the direct transport, the one order of messages and the hole that froze
+players ([docs/10](10-direct-transport-and-messages.md)); departures, outages and reconnect
+([docs/11](11-departures-and-reconnect.md)); join in progress ([docs/12](12-join-in-progress.md)); the relay
+([docs/13](13-relay.md)). Two statements above need their later correction: "in order as they arrive, repeat the
+last one" is right, but a stream that was silent for longer than a packet reaches back must **step over the hole**
+or it stands still for good; and per-sender order of messages was not enough, **one order through the host** is
+what the game needs.

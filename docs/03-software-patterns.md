@@ -31,6 +31,20 @@ receive queue was not empty). If both sides receive the same packets in the same
 identical forever (same random seed exchanged at start, same inputs). Desync is then impossible by construction;
 latency only shows as waiting, which the adaptive buffer hides.
 
+## Not every game is lockstep: state replication with a mailbox
+
+The other common shape, found in Shining Soul II (2-4 players, co-op) only after a lockstep transport had been
+built for it and played badly: each console **decides for its own character** and writes its state into its block
+every frame; a console reads its own block from the send buffer at once and only the others' from the receive
+slots; and everything that happens once (an enemy appears, an item is taken, a hit, a change of map) is a
+**message passed inside the same blocks in stop-and-wait steps**, each repeated until every player's block
+acknowledges it. Nothing has to arrive on a particular frame, and the cable never promised that either.
+
+For such a game "advance only with a packet" does not exist, a shared timeline buys nothing, and latency hurts the
+*messages* (one round trip per step), not the picture. How to recognise it, what the blocks hold and what follows
+for the transport: [docs/09](09-multi-sio-anatomy.md) and [docs/10](10-direct-transport-and-messages.md). **Decide
+which shape a game has before choosing anything else.**
+
 ## Data the parent relays
 
 Two-player Multiplay protocols often have the parent echo what it received: its next packet carries both players'
@@ -44,6 +58,7 @@ words are relayed copies and by which rule, so the port can compute the relay on
 ## What to record per game (template in [games/TEMPLATE.md](../games/TEMPLATE.md))
 
 Packet size, queue depth, the send/receive functions, the status bits, the connect handshake, every retry
-counter/timeout, whether the play loop is lockstep, whether packets carry inputs or state, which words are relayed
-copies of received data, and where a round ends (the state each side plays differently on purpose: win/lose
-screens).
+counter/timeout, **the link style** (lockstep on inputs, state replication, stop-and-wait messages, or a mix) with
+its evidence, which bytes are state and which are events, the message kinds by role and by sender, every "every
+player" condition (barriers, zones, ready bits), which words are relayed copies of received data, and where a round
+ends (the state each side plays differently on purpose: win/lose screens).

@@ -25,8 +25,28 @@ Netcode
 - GGRS (rollback in Rust): https://github.com/gschup/ggrs
 - Valve GameNetworkingSockets (open source, NAT traversal): https://github.com/ValveSoftware/GameNetworkingSockets
 
+SDK link libraries, as documented by decompilations
+
+- MultiSio (the SDK's Multiplay library): Shining Soul II uses it (SS2Decomp `docs/LINK_CABLE.md`); a readable C
+  source with the same layout is in the Sonic Advance 2 decompilation (`src/multi_sio.c`):
+  https://github.com/SAT-R/sa2
+- MusicPlayer2000 ("m4a") sound driver in C and assembly, as in the pret decompilations (`src/m4a.c`,
+  `src/m4a_1.s`): https://github.com/pret/pokeemerald
+
+Porting
+
+- OptiPort (the author's method for debugging and optimising ports; its online module states the general contracts
+  that the chapters here apply to link games): https://github.com/MatyMeatBoy/OptiPort
+- x32 ABI (x86-64 code with 32-bit pointers): https://en.wikipedia.org/wiki/X32_ABI
+- clang's `arm64_32` target (AArch64 code with 32-bit pointers, Mach-O objects): LLVM's AArch64 back end,
+  https://llvm.org/
+
 Games
 
 - ReKHCoM (Kingdom Hearts: Chain of Memories decompilation port, first GBANoCable implementation):
   https://github.com/MatyMeatBoy/ReKHCoM
-- SS2Decomp (Shining Soul II): https://github.com/MatyMeatBoy/SS2Decomp
+- SS2Decomp (Shining Soul II, matching decompilation; link notes in `docs/LINK_CABLE.md`, `LINK_PLAYER_PACKET.md`,
+  `LINK_MESSAGES.md`): https://github.com/MatyMeatBoy/SS2Decomp
+- ShiningSource (Shining Soul II native port; the online layer of chapters 09-13 and the port of chapter 15:
+  `runtime/core/netlink.c`, `relay/`, `docs/ARCHITECTURE.md`, `docs/OPTIPORT.md`, `docs/RELEASE_*.md`):
+  https://github.com/MatyMeatBoy/ShiningSource

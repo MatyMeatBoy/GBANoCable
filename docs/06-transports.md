@@ -33,7 +33,11 @@ rooms. Re-sending the room every second keeps the seat; a player whose address c
 old address's lease expires (see "Hardening a public relay" below: seats are never taken over earlier). Seat 1 is the
 host; `--seats` sets the room size (2-4).
 
-Ideas welcome: STUN/ICE hole punching with relay fallback, WebRTC data channels for web builds, a room browser.
+For a 2-4 player game the relay also decides seats, and it is the place to simulate a bad network and outages:
+[docs/13](13-relay.md) (rooms hashed with the ROM and a rules number, seats with tokens, what a relay restart does,
+the test knobs).
+
+Ideas welcome: STUN/ICE hole punching with relay fallback, WebRTC data channels for web builds.
 
 ## Lobbies: one provider, several backends (ReKHCoM, 23/10/2026)
 
@@ -66,7 +70,9 @@ in [tools/relay.py](../tools/relay.py) (with unit tests):
   IP and one global.
 - **No seat takeover.** An occupied seat is never handed to another address before its lease expires (30 s). The
   cost: a player whose address changed (Wi-Fi to mobile) waits for the lease. The older behaviour (the room follows
-  the newest address) let anyone who knew a room code kick a player.
+  the newest address) let anyone who knew a room code kick a player. A per-player token lets the relay follow an
+  address change at once (ShiningSource's relay does); see [docs/13](13-relay.md), section 3, for what such a
+  token does and does not protect.
 - **No amplification.** A list answer is never larger than its request: clients pad the list request with zeros to
   their receive buffer (512 bytes), and an old 2-byte request gets an empty list. Spoofed small requests then cannot
   turn the relay into an amplifier.

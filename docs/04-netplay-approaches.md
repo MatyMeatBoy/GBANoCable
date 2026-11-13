@@ -8,6 +8,7 @@
 | **Packet slots (GBANoCable)** | one game packet per frame per player | high: the game waits instead of failing | none if the game is deterministic per packet | finding the packet layer |
 | Input lockstep with delay | inputs, frame-tagged | buffer = delay | none if deterministic | game exchanges inputs |
 | **Rollback (GGPO / GGRS)** | inputs | high, without visible delay | handled by resimulation | inputs + fast save/restore |
+| **Direct state + one ordered message channel (ShiningSource)** | each player's state block per frame, unordered between players; one-time events whole, in one order through the host | high: nobody waits; an event costs a trip to the host and back | none to repair for state (the newest wins); events are exactly-once in one order | a game that replicates state; patches in its message sender and receiver ([docs/10](10-direct-transport-and-messages.md)) |
 | Host authority + state repair (ShiningSoul2Recomp) | inputs to host, state to guests | high | repaired by sending snapshots | snapshots, hashing |
 
 ## Vocabulary (the "modern online" people ask about)
@@ -32,9 +33,21 @@ carry state.
 
 ## Choosing for a game
 
-1. Find the packet layer (docs/03, docs/05). Always do packet slots first: it gives correctness and "never cut".
-2. If the play loop exchanges inputs and is deterministic: add rollback to remove the buffer's delay.
-3. If it exchanges state or is not deterministic: hash the state every N frames and repair from the host.
+1. Find the packet layer (docs/03, docs/05) **and read what travels in it** ([docs/09](09-multi-sio-anatomy.md)):
+   who writes the send buffer, who reads the receive buffers, whether a console reads its own data locally, what the
+   play loop waits for.
+2. **Lockstep on inputs** (the play loop advances only with the frame's packet): packet slots on one timeline with
+   an agreed delay; it gives correctness and "never cut". If it is deterministic, add rollback to remove the
+   delay.
+3. **State replication** (each console decides for itself and tells the others): deliver directly, never make one
+   player wait for another ([docs/10](10-direct-transport-and-messages.md)). Packet slots are *consistent* for such
+   a game and still wrong: they were built first for Shining Soul II, passed every test and played badly.
+4. **Stop-and-wait messages inside the blocks** (usually together with 3): carry each message whole on a reliable
+   channel with one order for every machine.
+5. If the game exchanges state through one authority and is not deterministic, and you can snapshot it: hash the
+   state every N frames and repair from the host.
+
+An earlier version of this list said "always do packet slots first". That is right only for case 2.
 
 ## Rollback on top of packet slots (done in ReKHCoM, 23/10/2026)
 

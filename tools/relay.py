@@ -5,6 +5,7 @@ Copyright (c) 2026 MatyMeatBoy. MIT License.
 
     python3 relay.py [--port 47800] [--seats 2] [--max-rooms 128]
     python3 relay.py --port 47801 --lag-ms 60 --jitter-ms 40 --loss 2     (local tests only: an impaired network)
+    python3 relay.py --port 47801 --outage 2:20:10                        (local tests only: seat 2 cut off for 10 s)
 
 Datagrams (codes are ASCII A-Z 0-9):
     'J' seat code          join or refresh a room (seat 1..--seats, code 1-16 characters). Send it every second.
@@ -30,7 +31,14 @@ Run one process (one port) per game and protocol: rooms of different games must 
 
 Test impairment (--lag-ms, --jitter-ms, --loss): forwarded game datagrams are held and dropped by wall-clock time,
 not by frames (a game that waits for the other player makes no frames: a frame-counted delay never expires).
+--outage SEAT:START:LENGTH[,...] (seconds) cuts one player off for a while, as a connection that is gone and comes
+back: from START seconds after that seat was first taken, for LENGTH seconds, every datagram from the address that
+took the seat is thrown away unread and nothing is sent to it. The relay then behaves as for any silent player (the
+seat's lease runs; with LENGTH above --peer-timeout the seat is freed and taken again when the player returns).
 Never use these options on a public relay.
+
+--max-datagram raises the largest game datagram passed (default 512 bytes, enough for the slot engine; the direct
+transport of reference/src/gnc_direct.c sends up to 1200).
 """
 import argparse
 import asyncio
@@ -53,13 +61,22 @@ CODE = re.compile(rb'[A-Z0-9]{1,16}\Z')
 
 class Relay(asyncio.DatagramProtocol):
     def __init__(self, *, seats=SEATS, max_rooms=128, peer_timeout=IDLE, rate=600, burst=1200, max_ips=4096,
-                 global_rate=10000, lag=0.0, jitter=0.0, loss=0.0, seed=None, clock=time.monotonic):
+                 global_rate=10000, lag=0.0, jitter=0.0, loss=0.0, seed=None, clock=time.monotonic, outages=(),
+                 max_datagram=MAX_DATAGRAM - 1):
         if not 2 <= seats <= 4:
             raise ValueError('seats must be 2..4')
         if min(max_rooms, peer_timeout, rate, burst, max_ips, global_rate) <= 0:
             raise ValueError('relay limits must be positive')
         if lag < 0 or jitter < 0 or not 0 <= loss < 100:
             raise ValueError('impairment must be lag/jitter >= 0 and loss 0..99')
+        if not 64 <= max_datagram <= 1400:
+            raise ValueError('max datagram must be 64..1400 bytes')
+        for seat, start, length in outages:
+            if not 1 <= seat <= seats or start < 0 or length <= 0:
+                raise ValueError('an outage is seat:start:length, seat 1..seats, seconds')
+        self.max_datagram = max_datagram + 1  # 'D' + the game datagram
+        self.outages = tuple(outages)         # (seat, seconds after the seat was first taken, seconds)
+        self.outage_seated = {}               # seat -> (address that first took it, when)
         self.seats, self.max_rooms, self.peer_timeout = seats, max_rooms, peer_timeout
         self.rate, self.burst, self.max_ips = rate, burst, max_ips
         self.global_rate = global_rate
@@ -158,6 +175,8 @@ class Relay(asyncio.DatagramProtocol):
         room = self.rooms.setdefault(code, {})
         room[seat] = (addr, now)
         self.where[addr] = (code, seat)
+        if self.outages:
+            self.outage_seated.setdefault(seat, (addr, now))  # an outage counts from the first time the seat was taken
         self.transport.sendto(b'O' + bytes([len(room)]), addr)
 
     def _announce(self, data, addr, now):
@@ -192,20 +211,37 @@ class Relay(asyncio.DatagramProtocol):
                 self._send_impaired(data, oaddr)
                 self.stats['forwarded'] += 1
 
+    def _cut_off(self, addr, now):
+        """Test outages: is that address cut off right now?"""
+        for seat, start, length in self.outages:
+            seated = self.outage_seated.get(seat)
+            if seated and seated[0] == addr and start <= now - seated[1] < start + length:
+                return True
+        return False
+
+    def _deliver(self, data, addr):
+        if self.outages and self._cut_off(addr, self.clock()):
+            self.stats['outage_drops'] += 1
+            return
+        self.transport.sendto(data, addr)
+
     def _send_impaired(self, data, addr):
         if self.loss and self.random.random() * 100 < self.loss:
             self.stats['impaired_lost'] += 1
             return
         hold = self.lag + (self.random.random() * self.jitter if self.jitter else 0.0)
         if hold <= 0:
-            self.transport.sendto(data, addr)
+            self._deliver(data, addr)
             return
-        asyncio.get_running_loop().call_later(hold, self.transport.sendto, data, addr)
+        asyncio.get_running_loop().call_later(hold, self._deliver, data, addr)
 
     def datagram_received(self, data, addr):
-        if not 2 <= len(data) <= MAX_DATAGRAM:
+        if not 2 <= len(data) <= self.max_datagram:
             return
         now = self.clock()
+        if self.outages and self._cut_off(addr, now):
+            self.stats['outage_drops'] += 1  # this player's connection is "gone": nothing of it is read
+            return
         if now >= self.next_sweep:
             self.sweep(now)
             self.next_sweep = now + 1
@@ -251,19 +287,27 @@ async def main():
     ap.add_argument('--jitter-ms', type=float, default=0, help='tests only: and up to this much more, at random')
     ap.add_argument('--loss', type=float, default=0, help='tests only: drop this percentage of forwarded datagrams')
     ap.add_argument('--seed', type=int, default=None, help='tests only: repeatable impairment')
+    ap.add_argument('--outage', default='', help='tests only: SEAT:START:LENGTH[,...] in seconds, cut that seat off')
+    ap.add_argument('--max-datagram', type=int, default=MAX_DATAGRAM - 1, help='largest game datagram passed, bytes')
     args = ap.parse_args()
     if not 1 <= args.port <= 65535:
         ap.error('port must be 1..65535')
     try:
+        outages = [tuple(float(v) if i else int(v) for i, v in enumerate(o.split(':')))
+                   for o in args.outage.split(',') if o]
+        if any(len(o) != 3 for o in outages):
+            raise ValueError('an outage is seat:start:length')
         factory = Relay(seats=args.seats, max_rooms=args.max_rooms, peer_timeout=args.peer_timeout, rate=args.rate,
                         burst=args.burst, lag=args.lag_ms / 1000, jitter=args.jitter_ms / 1000, loss=args.loss,
-                        seed=args.seed)
+                        seed=args.seed, outages=outages, max_datagram=args.max_datagram)
     except ValueError as e:
         ap.error(str(e))
     loop = asyncio.get_running_loop()
     transport, relay = await loop.create_datagram_endpoint(lambda: factory, local_addr=(args.bind, args.port))
     impaired = f', impaired {args.lag_ms:g}+{args.jitter_ms:g} ms, {args.loss:g}% loss' if (
         args.lag_ms or args.jitter_ms or args.loss) else ''
+    if outages:
+        impaired += ', outages ' + args.outage
     print(f'GBANoCable relay on UDP {args.port}, {args.seats} seats, max rooms {args.max_rooms}{impaired}', flush=True)
     try:
         while True:
