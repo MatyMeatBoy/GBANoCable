@@ -78,6 +78,19 @@ in low memory. The image runs on stacks in low memory (it stores addresses of it
 coroutine switch; on Android every service must run on the thread's real stack, because the Java runtime aborts a
 call made from a stack it does not know.
 
+**Reverse callbacks and host UI (0.8.9 follow-up).** A host-to-guest options callback runs while the host service
+frame is still active. In this non-reentrant bridge it must be a leaf operation: update/read cached state without
+logging, file access or a lazy environment query that would call the host again and reuse the active service
+stack. A guarded callback fixture reproduced that diagnostic failure. This is a bridge-specific constraint, not
+a claim that all callbacks must be leaves.
+
+Rebasing the guest does not rewrite a host UI's fixed ROM pointers. An options-menu font read survived in that
+form until an actual menu test faulted. The repair reads the user-supplied ROM file through bounded offsets and
+falls back safely; nine synthetic-file tests cover malformed inputs without distributing cartridge content.
+Rendered ARMv7/ARM64 menu tests exercise live option acknowledgments and the file-reader path. See the
+[pinned 0.8.9 evidence](../games/shining-soul-2.md#089-remote-combat-sound-update-2026-11-16); offline final hashes
+alone did not cover either boundary.
+
 **Thunks and rewrites the 64-bit conventions need** (all generated, none hand-written):
 
 - *Structs by value.* A function declared `f(s32 x, s32 y, void *p)` in one file and defined `f(struct Pos pos,

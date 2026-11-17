@@ -175,7 +175,38 @@ The existing direct/message channels, departure/rejoin rules and join-in-progres
 certified by the block comparison or by the user connection. Retest transitions, barriers and each timeout with
 the mixed devices before expanding the coverage claim.
 
-**Open audio report.** A user reports that remote players' hits are inaudible. Cause and affected configurations
-are unconfirmed. Investigation and an experimental default-on toggle are planned; neither a completed fix nor a
-verified shipped toggle is claimed here. Test a remote hit independently of local hits, music and stream startup.
-This is a user-reported limitation, not a verified mechanism in the lessons table.
+**Historical audio report.** Remote players' inaudible attacks motivated the later 0.8.9 change below. Its
+implementation and measured scope are now available; confirmation on the reporting physical devices is pending.
+
+## 0.8.9 remote combat sound update (2026-11-16)
+
+Pinned source: [ShiningSource 316a6bf](https://github.com/MatyMeatBoy/ShiningSource/tree/316a6bf691e9e905d9405f103497cded240f1035),
+published as v0.8.9; [verification record](https://github.com/MatyMeatBoy/ShiningSource/blob/316a6bf691e9e905d9405f103497cded240f1035/docs/ANDROID_0.8.9_VERIFICATION.md).
+
+- **Mechanism (code and compiled branch checks):** action records already reached remote actors, but eight
+  presentation-side sound gates excluded their remote state. Relax those gates while online and enabled; reuse
+  each machine's sound engine. No audio stream, new sound packet, combat ownership or wire change is needed.
+  [Policy](https://github.com/MatyMeatBoy/ShiningSource/blob/316a6bf691e9e905d9405f103497cded240f1035/runtime/core/remote_sfx.c)
+  and [source-patch reasons](https://github.com/MatyMeatBoy/ShiningSource/blob/316a6bf691e9e905d9405f103497cded240f1035/games/ss2/port/patches.json)
+  describe the boundaries; no game code or asset is reproduced here.
+- **Deduplication:** retain each actor's action/animation transition checks. Repeating a received record must not
+  retrigger the cue; do not coalesce globally by sound ID, because separate players and class-specific layered
+  sounds can legitimately request the same cue. The remote bow cue additionally waits for the animation clock
+  to run, so frozen phase zero cannot sound every frame. The original local-player branch remains intact.
+- **Option:** experimental remote sounds default on, with environment override, live menu switching and saved
+  preference. Disabled/offline paths retain local behavior. Protocol rules remain 6. The reverse option callback
+  sets and reads cached state without calling host services; menu font reads use bounded file offsets rather
+  than assuming the host can dereference a fixed guest ROM address.
+- **Automated evidence:** six compiled-C regressions exercise extracted actual sound branches and policy,
+  including callback purity; the original branches fail the four game-path scenarios. Nine synthetic font-file
+  cases cover bounds/fallback. With the earlier fifteen regressions, thirty tests pass.
+- **Online evidence:** two Windows clients, 27000 frames each with the option off and then on; each session has
+  26509 shared labels and zero recorded block differences. In the starting encounter, cue `0x14` calls into the
+  sound engine increase from 8 to 18 across the clients. Combat is a required positive control. This establishes
+  sound-engine calls and the checked shared blocks, not physical audibility, full-state determinism, exact cue
+  counts in arbitrary sessions or four-player correctness.
+- **Android evidence:** ARMv7 on API30 through native bridge and ARM64 on API35/16 KiB pages pass menu/callback
+  checks; offline canonical 32000-frame replays retain the reference hash and audio. ARM64 menu/replay checks
+  force image relocation and memory-file execution. These are separate from the Windows online sessions and the
+  user's earlier Android–Windows connection. Physical companion-audio confirmation remains pending; no new
+  Linux runtime test is claimed.

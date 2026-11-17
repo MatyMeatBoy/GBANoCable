@@ -97,6 +97,25 @@ marker retained its internal reset code. For audio, test local and remote events
 music or local hits does not verify a remote hit. An unconfirmed remote-hit report belongs in a game's open
 limitations until a reproducible mechanism and fix are measured.
 
+### Presentation audio and reverse callbacks (0.8.9)
+
+The [Shining Soul II audio update](../games/shining-soul-2.md#089-remote-combat-sound-update-2026-11-16) demonstrates
+why audible presentation and transport correctness require separate checks:
+
+- Require actual combat as a positive control. A lobby-only session with no attack cannot validate remote sound.
+  Count entries into the actual sound engine with the option off/on; compare shared sender/label records too.
+  Preserve the distinction between a recorded cue, listening to the output, and full simulation determinism.
+- Exercise each actor independently, repeat its action record, then exercise actors using the same cue together.
+  Retain legitimate layered cues. Freeze and resume an animation at its cue phase; local and remote policies may
+  differ intentionally. Compile actual extracted branches against the real policy rather than mirroring them in
+  a stand-in implementation, and require the original branches to fail the relevant scenarios.
+- Check default, environment override, live callback acknowledgment and persistence across fresh processes. In a
+  non-reentrant stack-switching bridge, guard reverse callbacks against every host-service call, including logs
+  and lazy environment reads; test the cached getter after its setter.
+- Open the real host menu after guest relocation. Use synthetic font files to test malformed headers, offsets,
+  overflow, truncation and fallback without publishing cartridge bytes; a replay that never opens the menu misses
+  a fixed-address host UI read. Keep Android UI/offline results separate from Windows online results.
+
 ## Small traps
 
 - **Unsigned wait timers.** A "waiting since" stamp stored as `now | 1` (so 0 can mean "not waiting") can be one
