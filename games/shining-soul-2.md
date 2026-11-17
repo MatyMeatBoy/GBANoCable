@@ -145,8 +145,9 @@ same machine; 2026-11-12/13, versions 0.1 to 0.7.5. It is not a fresh certificat
   - Linux with a window; Android online on a device.
 - Historical known problems: when the host leaves the session ends for everybody; a departed player blocked map
   exits (above). Later source adds departure-aware exits/world-map waits; the new 0.8.8 cross-platform test does
-  not revalidate every departure case. The story message carrying a function address still needs a targeted
-  cross-processor check; ordinary room/block equality does not establish that path.
+  not revalidate every departure case. At that checkpoint the story message carrying a function address still
+  needed a targeted cross-processor check; ordinary room/block equality did not establish that path. The 0.8.10
+  update below records the later reproduced defect and mixed-processor check.
 
 ## 0.8.8 cross-platform update (2026-11-16)
 
@@ -210,3 +211,45 @@ published as v0.8.9; [verification record](https://github.com/MatyMeatBoy/Shinin
   force image relocation and memory-file execution. These are separate from the Windows online sessions and the
   user's earlier Android–Windows connection. Physical companion-audio confirmation remains pending; no new
   Linux runtime test is claimed.
+
+## 0.8.10 portable callback update (2026-11-17)
+
+Pinned source: [ShiningSource 0d29bf9](https://github.com/MatyMeatBoy/ShiningSource/tree/0d29bf92da71346e74565dcf4b8c4692d6e24cf4),
+[published notes](https://github.com/MatyMeatBoy/ShiningSource/blob/0d29bf92da71346e74565dcf4b8c4692d6e24cf4/docs/RELEASE_0.8.10.md).
+
+- **Reproduced mechanism:** Android 0.8.9 attempted to execute `0x0A04D530`, the Windows native entry for the
+  original function `sub_0803E5D8`. A3 carried the foreign callback; A4 had the same native-pointer contract.
+  Relocation can also break that contract between two builds of the same architecture.
+- **Code:** A3/A4 now carry exact original function IDs, including the Thumb bit, through network/order/snapshot
+  queues. Only final delivery converts to the receiver's native entry, including own-message delivery. Validate
+  tag, length and chunk count; reject unknown callbacks without mutation/execution. Preserve arguments, padding
+  and unrelated messages. Rules **7** intentionally exclude older peers; update all participants together.
+  Sources: [codec](https://github.com/MatyMeatBoy/ShiningSource/blob/0d29bf92da71346e74565dcf4b8c4692d6e24cf4/runtime/core/netptr.c)
+  and [function identities](https://github.com/MatyMeatBoy/ShiningSource/blob/0d29bf92da71346e74565dcf4b8c4692d6e24cf4/runtime/core/codeptr.c).
+- **Measured:** 42 automated regressions; Windows versus ARM64 Android15 emulator, 42000 frames, 16 KiB pages,
+  forced relocation and memory-file execution. Both callback tags execute on both peers with matching canonical
+  wire IDs. Natural callbacks cross both directions; observed areas advance `12:0 → 12:1 → 12:2`. This does not
+  establish a specific first-dungeon identity. A dedicated callback with an observable sound-engine effect is a
+  positive control, separate from the naturally reached callbacks.
+  [Mixed-host fixture](https://github.com/MatyMeatBoy/ShiningSource/blob/0d29bf92da71346e74565dcf4b8c4692d6e24cf4/tools/tests/android_callback_test.py)
+  and [compiled codec checks](https://github.com/MatyMeatBoy/ShiningSource/blob/0d29bf92da71346e74565dcf4b8c4692d6e24cf4/tools/tests/test_net_codeptr.py).
+- **Limits:** not physical-device or four-player certification; room identity/block equality and offline replay
+  alone had missed this late payload. A matching version number did not make native PCs portable.
+
+## Exit evidence after 0.8.10 (next-release work, 2026-11-17)
+
+Pinned source [e74a183](https://github.com/MatyMeatBoy/ShiningSource/tree/e74a18344f83f3b7e61da934cf50f956de04a071)
+adds [local exit evidence and optional delivery](https://github.com/MatyMeatBoy/ShiningSource/blob/e74a18344f83f3b7e61da934cf50f956de04a071/docs/AUTOMATIC_ANDROID_REPORTS.md).
+This is preparation for 0.8.11, not a published 0.8.10 feature or a diagnosis of an unexplained 846-byte log.
+
+- **Mechanism/code:** API30+ own-process exit history is matched to the game process, attempt timestamp and PID;
+  never append while that game is alive or a later attempt has taken ownership. A bounded previous-session log
+  survives the next launch. API21–29 keeps native/Java/local preservation without OS history. Successful exits
+  and user stops are informational; SIGKILL alone does not prove low memory.
+- **Delivery design:** optional HTTPS, local opt-out, redacted bounded payload, private durable outbox, exact-byte
+  content hash, server idempotence and retry backoff. Reports are evidence for reviewed fixes, not executable
+  instructions or automatic binary patches; no game transport change is implied.
+- **Recorded check/limits:** the pinned source reports an ARM64/API35 emulator test killing its own game process,
+  recovering the OS exit reason on launcher return, obtaining an HTTPS receipt, preserving the session on the
+  next Play and completing normally. The original short log's cause and physical-device confirmation remain
+  unknown. No service address, private log or personal path is reproduced here.

@@ -167,6 +167,17 @@ announcement). *None of this has been done in a recomp; it is the port's list of
 
 ## 9. What a decompilation still adds
 
+Before treating a cross-platform message check as complete, identify payload words that mean functions or
+objects, not merely integers. A native PC is not a portable wire identity: serialize a stable original function
+ID, keep it canonical in delayed/order/snapshot queues, and resolve through the destination's code table only
+at final delivery, including the sender's own loopback. Preserve the original Thumb identity bit; validate the
+message schema and reject an unknown ID rather than guessing that every pointer-looking word is code. Version
+the incompatible convention so old peers cannot join by accident.
+
+This decision has a reproduced native-port example: [the 0.8.10 callback check](../games/shining-soul-2.md#0810-portable-callback-update-2026-11-17)
+executes both scene callback kinds across moved ARM64 and Windows images. It does not change this chapter's
+status into proof that a source-less static recompilation has implemented every earlier step.
+
 You can do all of the above by tracing. What you cannot get by tracing is the *list of everything*: every
 "everybody" condition, every handler with a fixed pool, every state shown only in passing. Those were each found in
 the port by reading the code after a real session went wrong. Without source, expect to find them the same way,
