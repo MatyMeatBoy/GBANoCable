@@ -118,8 +118,11 @@ Three facts from this table drive the design in [docs/10](10-direct-transport-an
 
 One story message carries **the address of a function** to run on every console. On cartridges all addresses are
 equal. In a native port two different builds have different addresses: seen in the traffic as a native code
-address (*traffic*; not resolved in the port: builds of different processors agreeing on it has not been examined).
-Look for function pointers in payloads before promising crossplay.
+address (*historical traffic*; at that checkpoint mixed-processor delivery had not been examined).
+The later [0.8.10 check](../games/shining-soul-2.md#0810-portable-callback-update-2026-11-17) reproduced a foreign-PC
+crash and resolved the two callback messages through stable original function IDs, with a moved ARM64/Windows
+delivery test. Keep IDs canonical until final delivery, including own-message delivery. Look for function
+pointers in payloads before promising crossplay; room/block equality alone did not cover this late path.
 
 ## 6. The barrier
 

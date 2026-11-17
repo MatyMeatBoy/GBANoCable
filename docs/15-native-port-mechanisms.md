@@ -78,14 +78,30 @@ in low memory. The image runs on stacks in low memory (it stores addresses of it
 coroutine switch; on Android every service must run on the thread's real stack, because the Java runtime aborts a
 call made from a stack it does not know.
 
+**Reverse callbacks and host UI (0.8.9 follow-up).** A host-to-guest options callback runs while the host service
+frame is still active. In this non-reentrant bridge it must be a leaf operation: update/read cached state without
+logging, file access or a lazy environment query that would call the host again and reuse the active service
+stack. A guarded callback fixture reproduced that diagnostic failure. This is a bridge-specific constraint, not
+a claim that all callbacks must be leaves.
+
+Rebasing the guest does not rewrite a host UI's fixed ROM pointers. An options-menu font read survived in that
+form until an actual menu test faulted. The repair reads the user-supplied ROM file through bounded offsets and
+falls back safely; nine synthetic-file tests cover malformed inputs without distributing cartridge content.
+Rendered ARMv7/ARM64 menu tests exercise live option acknowledgments and the file-reader path. See the
+[pinned 0.8.9 evidence](../games/shining-soul-2.md#089-remote-combat-sound-update-2026-11-16); offline final hashes
+alone did not cover either boundary.
+
 **Thunks and rewrites the 64-bit conventions need** (all generated, none hand-written):
 
 - *Structs by value.* A function declared `f(s32 x, s32 y, void *p)` in one file and defined `f(struct Pos pos,
   u8 *p)` in another is the same call on ARM and on 32-bit x86, and not on any 64-bit convention. Adapters receive
   the declared form and call the defined form (12 functions; struct sizes measured with the compiler).
-- *Small arguments on arm64_32.* That convention packs small stack arguments and trusts the caller to have extended
-  them. Every definition is rewritten to take full words and narrow them itself, as the console's compiler did (375
-  definitions).
+- *Small arguments.* arm64_32 packs small stack arguments and trusts caller extension. Modern ARMv7 AAPCS also
+  trusts the caller to extend a narrow integer: do not assume every ARM compiler behaves like the original
+  cartridge compiler. Rewrite definitions to take full words and narrow locally, and match their declarations.
+  The original arm64_32 pass changed 375 definitions. The later ARMv7 check reproduced a wide negative argument
+  reaching a `u16` callee without truncation; normalization must include replacement runtime definitions and
+  matching headers, not just generated game code. See the [0.8.8 evidence](../games/shining-soul-2.md#088-cross-platform-update-2026-11-16).
 - *Division* (section 3) and *absolute symbols* for WebAssembly, both as rewrites of the LLVM IR **before
   optimisation** (afterwards the compiler may already have used the undefined cases to remove code).
 
@@ -303,7 +319,7 @@ A matching decompilation reproduces the ROM; it can still be wrong C that works 
 |---|---|---|---|
 | a call with fewer arguments than the function takes | the missing value was still in the register from the call before | a checker compares every call with the definition's parameter count | write the argument out **in the decompilation**; the ROM still matches |
 | a struct passed by value where a pointer is defined (or the reverse); different parameter counts | ARM passes the struct's first words in the registers where the pointer is expected | a checker of declarations against definitions | the same; meanwhile generated adapters (section 2) |
-| `u16` in one file, `s32` in another | every argument travels in a full word and the callee narrows it | found by per-frame hashes on arm64_32 (a sprite's scale arrived shifted; a clipped sprite was drawn) | generated narrowing (section 2); the lasting repair is consistent declarations |
+| `u16` in one file, `s32` in another | the original compiler narrowed in the callee; modern ARMv7 and arm64_32 may trust caller extension instead | per-frame hashes found errors on both; ARMv7 retained 90 wrong intermediate hashes despite matching final hash/audio | consistent wide boundary plus explicit callee narrowing, including replacement runtime/header pairs (section 2) |
 | failed allocations nobody checks | the console carried on | reported where they happen | none: known |
 
 Each real one shows up as a crash or a wrong task entry; the checkers list candidates, they do not prove.

@@ -8,7 +8,9 @@ the decompilation; "traffic" = read off message logs of scripted sessions; "meas
 on one machine through a local relay with a simulated network. Names such as `sub_08001804` are the
 decompilation's.
 
-Status: **played by people** (which is what found most problems), **measured only with scripts**.
+Status: **played by people** (which is what found most problems). Historical measurements below use scripts;
+the [0.8.8 update](#088-cross-platform-update-2026-11-16) distinguishes new automated checks from a user-reported
+Android–Windows connection.
 
 ## The cartridge's link
 
@@ -72,7 +74,8 @@ Status: **played by people** (which is what found most problems), **measured onl
 - **Transport**: *direct* (default): each player's blocks handed over in order as they arrive, the last one
   repeated, nobody waits; one-time messages whole on a reliable channel in **one order through the host**
   ([docs/10](../docs/10-direct-transport-and-messages.md)). *Stepped* (when a delay is set by hand): one timeline,
-  fixed or automatic delay, a missing block stalls. Rules version 5; the two transports never meet.
+  fixed or automatic delay, a missing block stalls. Rules version **6 in 0.8.8** (5 in the historical tests);
+  the two transports never meet. The new identity fingerprints original ROM bytes before native pointer patching.
 - Patches to game code (all inactive over a cable):
   - sender task: hand the whole message to the channel instead of the chunk steps;
   - the queue monitor: hand every waiting message over in the frame it was made;
@@ -100,6 +103,8 @@ Status: **played by people** (which is what found most problems), **measured onl
 
 ## Port
 
+This paragraph records the earlier port state; current Android ABIs and coverage are in the dated update below.
+
 - **Porting status**: matching decompilation of all game code (the sound library's hand-written assembly aside),
   data described. Native port
   compiled from it unchanged plus about forty-five patches with reasons
@@ -115,8 +120,8 @@ Status: **played by people** (which is what found most problems), **measured onl
 
 ## Test status
 
-All measured items: one development PC, headless scripted players, a relay on the same machine; 2026-11-12/13,
-versions 0.1 to 0.7.5.
+The following is the **historical** test record: one development PC, headless scripted players, a relay on the
+same machine; 2026-11-12/13, versions 0.1 to 0.7.5. It is not a fresh certification of these cases on 0.8.8.
 
 - Checked:
   - stepped transport: 4 players 13,000 frames with 10% loss and 120-160 ms lag; 4 players 80,000 frames with 2%
@@ -138,5 +143,113 @@ versions 0.1 to 0.7.5.
     holds the others on the level**;
   - join in progress in the town, at a map with exits or a boss, two newcomers at once, a departed player's seat;
   - Linux with a window; Android online on a device.
-- Known problems: when the host leaves the session ends for everybody; a departed player blocks map exits (above);
-  the story message that carries a function address has not been examined between builds of different processors.
+- Historical known problems: when the host leaves the session ends for everybody; a departed player blocked map
+  exits (above). Later source adds departure-aware exits/world-map waits; the new 0.8.8 cross-platform test does
+  not revalidate every departure case. At that checkpoint the story message carrying a function address still
+  needed a targeted cross-processor check; ordinary room/block equality did not establish that path. The 0.8.10
+  update below records the later reproduced defect and mixed-processor check.
+
+## 0.8.8 cross-platform update (2026-11-16)
+
+Pinned source: [ShiningSource 3433811](https://github.com/MatyMeatBoy/ShiningSource/tree/3433811a8e429ceb67009b20dd3d9915fe3f74e3).
+The [verification record](https://github.com/MatyMeatBoy/ShiningSource/blob/3433811a8e429ceb67009b20dd3d9915fe3f74e3/docs/ANDROID_0.8.8_VERIFICATION.md)
+and [technical handoff](https://github.com/MatyMeatBoy/ShiningSource/blob/3433811a8e429ceb67009b20dd3d9915fe3f74e3/docs/REKHCOM_LESSONS_2026-11-16.md)
+separate code observations, emulated execution and physical-device limitations.
+
+| Evidence | What it establishes | Limits |
+|---|---|---|
+| User report: Android and Windows connected successfully | A reported real cross-platform connection, beyond the earlier scripted-only record | Device models, selected ABIs, duration, network topology and participant count were not recorded; no packet trace or quantified QA result was supplied |
+| Automated, moved Android x32 guest versus Windows; 24000 frames per process, 23509 shared labels, zero recorded block differences | The corrected room identity permits this pair to meet and their recorded blocks/status agree at shared labels | Android x32 means x86_64 instructions with 32-bit pointers, not ARM32; headless/emulated sequence, not a measured physical session or complete-memory comparison |
+| Offline ARMv7 API21 CPU emulation versus ARM64 trace; all 32000 frame hashes match, final hash and audio match | The tested ARM32 path agrees throughout this replay after ABI normalization | Offline; no proof of ARM32 online, all gameplay, or original-cartridge/emulator accuracy |
+| Rendered Android lifecycle and configuration checks | SDL watchers receive actual background/foreground transitions; density and MCC/MNC changes preserve the tested game process | Emulators/native bridges; not a test of peer recovery, four-player play or OEM lifecycle behavior |
+
+**Port update (code and recorded tests).** The APK includes native ARMv7 as well as ARM64 and x86_64. ARMv7 uses
+a PIC native guest and static service stubs; the 64-bit hosts retain 32-bit-pointer guests and checked movable
+image/stacks/bridge allocations. Services return to the real Android thread stack. Executable pages transition
+from writable to executable, with a memory-file fallback; only host-owned mappings may be replaced. Original-ROM
+identity is captured before function pointers are patched. The narrow-argument repair covers both generated game
+definitions/declarations and private runtime/header copies. See [portable mechanisms](../docs/15-native-port-mechanisms.md)
+and [new testing checks](../docs/07-testing.md#cross-platform-and-mobile-checks-2026-11-16).
+
+**Online scope.** Rules 6 intentionally separate older clients; all peers need the updated identity convention.
+The existing direct/message channels, departure/rejoin rules and join-in-progress prototype are not newly
+certified by the block comparison or by the user connection. Retest transitions, barriers and each timeout with
+the mixed devices before expanding the coverage claim.
+
+**Historical audio report.** Remote players' inaudible attacks motivated the later 0.8.9 change below. Its
+implementation and measured scope are now available; confirmation on the reporting physical devices is pending.
+
+## 0.8.9 remote combat sound update (2026-11-16)
+
+Pinned source: [ShiningSource 316a6bf](https://github.com/MatyMeatBoy/ShiningSource/tree/316a6bf691e9e905d9405f103497cded240f1035),
+published as v0.8.9; [verification record](https://github.com/MatyMeatBoy/ShiningSource/blob/316a6bf691e9e905d9405f103497cded240f1035/docs/ANDROID_0.8.9_VERIFICATION.md).
+
+- **Mechanism (code and compiled branch checks):** action records already reached remote actors, but eight
+  presentation-side sound gates excluded their remote state. Relax those gates while online and enabled; reuse
+  each machine's sound engine. No audio stream, new sound packet, combat ownership or wire change is needed.
+  [Policy](https://github.com/MatyMeatBoy/ShiningSource/blob/316a6bf691e9e905d9405f103497cded240f1035/runtime/core/remote_sfx.c)
+  and [source-patch reasons](https://github.com/MatyMeatBoy/ShiningSource/blob/316a6bf691e9e905d9405f103497cded240f1035/games/ss2/port/patches.json)
+  describe the boundaries; no game code or asset is reproduced here.
+- **Deduplication:** retain each actor's action/animation transition checks. Repeating a received record must not
+  retrigger the cue; do not coalesce globally by sound ID, because separate players and class-specific layered
+  sounds can legitimately request the same cue. The remote bow cue additionally waits for the animation clock
+  to run, so frozen phase zero cannot sound every frame. The original local-player branch remains intact.
+- **Option:** experimental remote sounds default on, with environment override, live menu switching and saved
+  preference. Disabled/offline paths retain local behavior. Protocol rules remain 6. The reverse option callback
+  sets and reads cached state without calling host services; menu font reads use bounded file offsets rather
+  than assuming the host can dereference a fixed guest ROM address.
+- **Automated evidence:** six compiled-C regressions exercise extracted actual sound branches and policy,
+  including callback purity; the original branches fail the four game-path scenarios. Nine synthetic font-file
+  cases cover bounds/fallback. With the earlier fifteen regressions, thirty tests pass.
+- **Online evidence:** two Windows clients, 27000 frames each with the option off and then on; each session has
+  26509 shared labels and zero recorded block differences. In the starting encounter, cue `0x14` calls into the
+  sound engine increase from 8 to 18 across the clients. Combat is a required positive control. This establishes
+  sound-engine calls and the checked shared blocks, not physical audibility, full-state determinism, exact cue
+  counts in arbitrary sessions or four-player correctness.
+- **Android evidence:** ARMv7 on API30 through native bridge and ARM64 on API35/16 KiB pages pass menu/callback
+  checks; offline canonical 32000-frame replays retain the reference hash and audio. ARM64 menu/replay checks
+  force image relocation and memory-file execution. These are separate from the Windows online sessions and the
+  user's earlier Android–Windows connection. Physical companion-audio confirmation remains pending; no new
+  Linux runtime test is claimed.
+
+## 0.8.10 portable callback update (2026-11-17)
+
+Pinned source: [ShiningSource 0d29bf9](https://github.com/MatyMeatBoy/ShiningSource/tree/0d29bf92da71346e74565dcf4b8c4692d6e24cf4),
+[published notes](https://github.com/MatyMeatBoy/ShiningSource/blob/0d29bf92da71346e74565dcf4b8c4692d6e24cf4/docs/RELEASE_0.8.10.md).
+
+- **Reproduced mechanism:** Android 0.8.9 attempted to execute `0x0A04D530`, the Windows native entry for the
+  original function `sub_0803E5D8`. A3 carried the foreign callback; A4 had the same native-pointer contract.
+  Relocation can also break that contract between two builds of the same architecture.
+- **Code:** A3/A4 now carry exact original function IDs, including the Thumb bit, through network/order/snapshot
+  queues. Only final delivery converts to the receiver's native entry, including own-message delivery. Validate
+  tag, length and chunk count; reject unknown callbacks without mutation/execution. Preserve arguments, padding
+  and unrelated messages. Rules **7** intentionally exclude older peers; update all participants together.
+  Sources: [codec](https://github.com/MatyMeatBoy/ShiningSource/blob/0d29bf92da71346e74565dcf4b8c4692d6e24cf4/runtime/core/netptr.c)
+  and [function identities](https://github.com/MatyMeatBoy/ShiningSource/blob/0d29bf92da71346e74565dcf4b8c4692d6e24cf4/runtime/core/codeptr.c).
+- **Measured:** 42 automated regressions; Windows versus ARM64 Android15 emulator, 42000 frames, 16 KiB pages,
+  forced relocation and memory-file execution. Both callback tags execute on both peers with matching canonical
+  wire IDs. Natural callbacks cross both directions; observed areas advance `12:0 → 12:1 → 12:2`. This does not
+  establish a specific first-dungeon identity. A dedicated callback with an observable sound-engine effect is a
+  positive control, separate from the naturally reached callbacks.
+  [Mixed-host fixture](https://github.com/MatyMeatBoy/ShiningSource/blob/0d29bf92da71346e74565dcf4b8c4692d6e24cf4/tools/tests/android_callback_test.py)
+  and [compiled codec checks](https://github.com/MatyMeatBoy/ShiningSource/blob/0d29bf92da71346e74565dcf4b8c4692d6e24cf4/tools/tests/test_net_codeptr.py).
+- **Limits:** not physical-device or four-player certification; room identity/block equality and offline replay
+  alone had missed this late payload. A matching version number did not make native PCs portable.
+
+## Exit evidence after 0.8.10 (next-release work, 2026-11-17)
+
+Pinned source [e74a183](https://github.com/MatyMeatBoy/ShiningSource/tree/e74a18344f83f3b7e61da934cf50f956de04a071)
+adds [local exit evidence and optional delivery](https://github.com/MatyMeatBoy/ShiningSource/blob/e74a18344f83f3b7e61da934cf50f956de04a071/docs/AUTOMATIC_ANDROID_REPORTS.md).
+This is preparation for 0.8.11, not a published 0.8.10 feature or a diagnosis of an unexplained 846-byte log.
+
+- **Mechanism/code:** API30+ own-process exit history is matched to the game process, attempt timestamp and PID;
+  never append while that game is alive or a later attempt has taken ownership. A bounded previous-session log
+  survives the next launch. API21–29 keeps native/Java/local preservation without OS history. Successful exits
+  and user stops are informational; SIGKILL alone does not prove low memory.
+- **Delivery design:** optional HTTPS, local opt-out, redacted bounded payload, private durable outbox, exact-byte
+  content hash, server idempotence and retry backoff. Reports are evidence for reviewed fixes, not executable
+  instructions or automatic binary patches; no game transport change is implied.
+- **Recorded check/limits:** the pinned source reports an ARM64/API35 emulator test killing its own game process,
+  recovering the OS exit reason on launcher return, obtaining an HTTPS receipt, preserving the session on the
+  next Play and completing normally. The original short log's cause and physical-device confirmation remain
+  unknown. No service address, private log or personal path is reproduced here.
