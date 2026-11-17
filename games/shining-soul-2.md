@@ -8,7 +8,9 @@ the decompilation; "traffic" = read off message logs of scripted sessions; "meas
 on one machine through a local relay with a simulated network. Names such as `sub_08001804` are the
 decompilation's.
 
-Status: **played by people** (which is what found most problems), **measured only with scripts**.
+Status: **played by people** (which is what found most problems). Historical measurements below use scripts;
+the [0.8.8 update](#088-cross-platform-update-2026-11-16) distinguishes new automated checks from a user-reported
+Android–Windows connection.
 
 ## The cartridge's link
 
@@ -72,7 +74,8 @@ Status: **played by people** (which is what found most problems), **measured onl
 - **Transport**: *direct* (default): each player's blocks handed over in order as they arrive, the last one
   repeated, nobody waits; one-time messages whole on a reliable channel in **one order through the host**
   ([docs/10](../docs/10-direct-transport-and-messages.md)). *Stepped* (when a delay is set by hand): one timeline,
-  fixed or automatic delay, a missing block stalls. Rules version 5; the two transports never meet.
+  fixed or automatic delay, a missing block stalls. Rules version **6 in 0.8.8** (5 in the historical tests);
+  the two transports never meet. The new identity fingerprints original ROM bytes before native pointer patching.
 - Patches to game code (all inactive over a cable):
   - sender task: hand the whole message to the channel instead of the chunk steps;
   - the queue monitor: hand every waiting message over in the frame it was made;
@@ -100,6 +103,8 @@ Status: **played by people** (which is what found most problems), **measured onl
 
 ## Port
 
+This paragraph records the earlier port state; current Android ABIs and coverage are in the dated update below.
+
 - **Porting status**: matching decompilation of all game code (the sound library's hand-written assembly aside),
   data described. Native port
   compiled from it unchanged plus about forty-five patches with reasons
@@ -115,8 +120,8 @@ Status: **played by people** (which is what found most problems), **measured onl
 
 ## Test status
 
-All measured items: one development PC, headless scripted players, a relay on the same machine; 2026-11-12/13,
-versions 0.1 to 0.7.5.
+The following is the **historical** test record: one development PC, headless scripted players, a relay on the
+same machine; 2026-11-12/13, versions 0.1 to 0.7.5. It is not a fresh certification of these cases on 0.8.8.
 
 - Checked:
   - stepped transport: 4 players 13,000 frames with 10% loss and 120-160 ms lag; 4 players 80,000 frames with 2%
@@ -138,5 +143,39 @@ versions 0.1 to 0.7.5.
     holds the others on the level**;
   - join in progress in the town, at a map with exits or a boss, two newcomers at once, a departed player's seat;
   - Linux with a window; Android online on a device.
-- Known problems: when the host leaves the session ends for everybody; a departed player blocks map exits (above);
-  the story message that carries a function address has not been examined between builds of different processors.
+- Historical known problems: when the host leaves the session ends for everybody; a departed player blocked map
+  exits (above). Later source adds departure-aware exits/world-map waits; the new 0.8.8 cross-platform test does
+  not revalidate every departure case. The story message carrying a function address still needs a targeted
+  cross-processor check; ordinary room/block equality does not establish that path.
+
+## 0.8.8 cross-platform update (2026-11-16)
+
+Pinned source: [ShiningSource 3433811](https://github.com/MatyMeatBoy/ShiningSource/tree/3433811a8e429ceb67009b20dd3d9915fe3f74e3).
+The [verification record](https://github.com/MatyMeatBoy/ShiningSource/blob/3433811a8e429ceb67009b20dd3d9915fe3f74e3/docs/ANDROID_0.8.8_VERIFICATION.md)
+and [technical handoff](https://github.com/MatyMeatBoy/ShiningSource/blob/3433811a8e429ceb67009b20dd3d9915fe3f74e3/docs/REKHCOM_LESSONS_2026-11-16.md)
+separate code observations, emulated execution and physical-device limitations.
+
+| Evidence | What it establishes | Limits |
+|---|---|---|
+| User report: Android and Windows connected successfully | A reported real cross-platform connection, beyond the earlier scripted-only record | Device models, selected ABIs, duration, network topology and participant count were not recorded; no packet trace or quantified QA result was supplied |
+| Automated, moved Android x32 guest versus Windows; 24000 frames per process, 23509 shared labels, zero recorded block differences | The corrected room identity permits this pair to meet and their recorded blocks/status agree at shared labels | Android x32 means x86_64 instructions with 32-bit pointers, not ARM32; headless/emulated sequence, not a measured physical session or complete-memory comparison |
+| Offline ARMv7 API21 CPU emulation versus ARM64 trace; all 32000 frame hashes match, final hash and audio match | The tested ARM32 path agrees throughout this replay after ABI normalization | Offline; no proof of ARM32 online, all gameplay, or original-cartridge/emulator accuracy |
+| Rendered Android lifecycle and configuration checks | SDL watchers receive actual background/foreground transitions; density and MCC/MNC changes preserve the tested game process | Emulators/native bridges; not a test of peer recovery, four-player play or OEM lifecycle behavior |
+
+**Port update (code and recorded tests).** The APK includes native ARMv7 as well as ARM64 and x86_64. ARMv7 uses
+a PIC native guest and static service stubs; the 64-bit hosts retain 32-bit-pointer guests and checked movable
+image/stacks/bridge allocations. Services return to the real Android thread stack. Executable pages transition
+from writable to executable, with a memory-file fallback; only host-owned mappings may be replaced. Original-ROM
+identity is captured before function pointers are patched. The narrow-argument repair covers both generated game
+definitions/declarations and private runtime/header copies. See [portable mechanisms](../docs/15-native-port-mechanisms.md)
+and [new testing checks](../docs/07-testing.md#cross-platform-and-mobile-checks-2026-11-16).
+
+**Online scope.** Rules 6 intentionally separate older clients; all peers need the updated identity convention.
+The existing direct/message channels, departure/rejoin rules and join-in-progress prototype are not newly
+certified by the block comparison or by the user connection. Retest transitions, barriers and each timeout with
+the mixed devices before expanding the coverage claim.
+
+**Open audio report.** A user reports that remote players' hits are inaudible. Cause and affected configurations
+are unconfirmed. Investigation and an experimental default-on toggle are planned; neither a completed fix nor a
+verified shipped toggle is claimed here. Test a remote hit independently of local hits, music and stream startup.
+This is a user-reported limitation, not a verified mechanism in the lessons table.

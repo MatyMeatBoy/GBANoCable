@@ -71,6 +71,32 @@ What this rig cannot say: anything about a real network (the outage is the relay
 (scripted players that press the same buttons hid the very problems that made the first transport unplayable), or
 about places the script does not reach. List those in the release notes.
 
+## Cross-platform and mobile checks (2026-11-16)
+
+The [Shining Soul II 0.8.8 update](../games/shining-soul-2.md#088-cross-platform-update-2026-11-16) adds evidence
+without turning a successful connection into a certification of every online feature. Keep these checks separate:
+
+| Check | Required observation | What a pass does not prove |
+|---|---|---|
+| Stable identity before native patching | The same original ROM/rules/transport gives the same room identity across ABIs and forced image placements | Compatible gameplay, cryptographic identity or every message carrying a function address |
+| Mixed-build online trace | Compare records by shared sender/label and distinguish continuous state from the common message order | All local frame numbers coincide, all memory matches, or reconnect/four-player cases passed |
+| Whole offline replay | Compare every checkpoint, report the first mismatch and compare audio; capture relevant state and pixels there | A matching final hash excuses intermediate differences, or matching pixels imply matching hidden state |
+| Narrow ABI boundaries | A wide or negative caller value reaches a narrow callee with the intended truncation/sign; check both generated and replacement runtime code/headers | One fixture covers struct-by-value, varargs, every callback or every processor ABI |
+| Real lifecycle delivery | Background/foreground reaches the handler through the pinned SDL delivery mechanism; held input/audio/pacing recover | Sending a queued synthetic event validates a watcher-only application event; process survival defines peer departure policy |
+| Configuration change | Change density and MCC/MNC, independently read the new values, restore, and retain process/activity evidence | Process death, device-specific behavior or mobile-network handoff is handled |
+| Guest memory ownership | Block old ranges, first hints and all but exact-sized gaps; force relocation/executable fallback and exhaustion | Existing mappings may be replaced, or any device has sufficient low address space |
+
+Record a user session separately: platform pair, actual selected ABI, duration, player count, connection type,
+gameplay reached and failures, leaving unknowns explicitly unknown. The current Android–Windows user report says
+they connected; it does not supply those fields. The automated 23509-label comparison has its own narrower scope.
+Offline ARM32/ARM64 replay agreement is separate again.
+
+For Android, also distinguish an unsupported installation ABI, loader failure, optional audio failure and game
+failure. A soft reset normalized to a successful process exit must not become an error solely because a diagnostic
+marker retained its internal reset code. For audio, test local and remote events separately: a stream producing
+music or local hits does not verify a remote hit. An unconfirmed remote-hit report belongs in a game's open
+limitations until a reproducible mechanism and fix are measured.
+
 ## Small traps
 
 - **Unsigned wait timers.** A "waiting since" stamp stored as `now | 1` (so 0 can mean "not waiting") can be one
